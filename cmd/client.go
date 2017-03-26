@@ -40,5 +40,5 @@ Start a remoteRadio client using a specific transportation protocol.
 }
 
 func init() {
-	RootCmd.AddCommand(serverCmd)
+	RootCmd.AddCommand(clientCmd)
 }

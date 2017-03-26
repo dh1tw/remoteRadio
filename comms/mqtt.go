@@ -13,17 +13,21 @@ import (
 )
 
 type MqttSettings struct {
-	WaitGroup                  *sync.WaitGroup
-	Transport                  string
-	BrokerURL                  string
-	BrokerPort                 int
-	ClientID                   string
-	Topics                     []string
-	ToDeserializeCatRequestCh  chan []byte
-	ToDeserializePingRequestCh chan []byte
-	ToWire                     chan IOMsg
-	Events                     *pubsub.PubSub
-	LastWill                   *LastWill
+	WaitGroup                   *sync.WaitGroup
+	Transport                   string
+	BrokerURL                   string
+	BrokerPort                  int
+	ClientID                    string
+	Topics                      []string
+	ToDeserializeCatRequestCh   chan []byte
+	ToDeserializeCatResponseCh  chan []byte
+	ToDeserializeCapabilitiesCh chan []byte
+	ToDeserializeStatusCh       chan []byte
+	ToDeserializePingRequestCh  chan []byte
+	ToDeserializePingResponseCh chan []byte
+	ToWire                      chan IOMsg
+	Events                      *pubsub.PubSub
+	LastWill                    *LastWill
 }
 
 // LastWill defines the LastWill for MQTT. The LastWill will be
@@ -63,22 +67,41 @@ func MqttClient(s MqttSettings) {
 	// mqtt.ERROR = log.New(os.Stderr, "ERROR - ", log.LstdFlags)
 
 	shutdownCh := s.Events.Sub(events.Shutdown)
-	forwardCatRequestCh := s.Events.Sub(events.ForwardCat)
+	// forwardCatRequestCh := s.Events.Sub(events.ForwardCat)
 
-	forwardCat := false
+	// forwardCat := false
 
 	var msgHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
 
 		if strings.Contains(msg.Topic(), "cat/setstate") {
 
-			if forwardCat {
-				s.ToDeserializeCatRequestCh <- msg.Payload()[:len(msg.Payload())]
-			}
+			// if forwardCat {
+			s.ToDeserializeCatRequestCh <- msg.Payload()[:len(msg.Payload())]
+			// }
 
-		} else if strings.Contains(msg.Topic(), "ping") {
+		} else if strings.Contains(msg.Topic(), "cat/state") {
+
+			// if forwardCat {
+			s.ToDeserializeCatResponseCh <- msg.Payload()[:len(msg.Payload())]
+			// }
+
+		} else if strings.Contains(msg.Topic(), "cat/caps") {
+
+			s.ToDeserializeCapabilitiesCh <- msg.Payload()[:len(msg.Payload())]
+
+		} else if strings.Contains(msg.Topic(), "cat/status") {
+
+			//		s.ToDeserializePingRequestCh <- msg.Payload()[:len(msg.Payload())]
+
+		} else if strings.Contains(msg.Topic(), "cat/ping") {
 
 			s.ToDeserializePingRequestCh <- msg.Payload()[:len(msg.Payload())]
+
+		} else if strings.Contains(msg.Topic(), "cat/pong") {
+
+			s.ToDeserializePingResponseCh <- msg.Payload()[:len(msg.Payload())]
 		}
+
 	}
 
 	var connectionLostHandler = func(client mqtt.Client, err error) {
@@ -134,9 +157,9 @@ func MqttClient(s MqttSettings) {
 			token := client.Publish(msg.Topic, msg.Qos, msg.Retain, msg.Data)
 			token.Wait()
 
-		//indicates if audio data should be forwarded for decoding & play
-		case ev := <-forwardCatRequestCh:
-			forwardCat = ev.(bool)
+			//indicates if cat data should be forwarded for decoding
+			// case ev := <-forwardCatRequestCh:
+			// 	forwardCat = ev.(bool)
 		}
 	}
 }

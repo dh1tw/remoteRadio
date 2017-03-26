@@ -58,7 +58,7 @@ message Vfo{
     int32 tuning_step = 12;
     repeated string functions = 13;
     map<string,float> levels = 14;
-    map<string,float> paramters = 15;
+    map<string,float> parameters = 15;
 }
 
 message Channel{

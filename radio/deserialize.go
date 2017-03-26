@@ -30,8 +30,15 @@ func (r *radio) deserializeCatRequest(request []byte) error {
 	}
 
 	if ns.Vfo != nil {
+
+		if ns.Vfo.GetFrequency() != r.state.Vfo.Frequency {
+			if err := r.updateFrequency(ns.Vfo.GetFrequency()); err != nil {
+				log.Println(err)
+			}
+		}
+
 		if ns.Vfo.GetMode() != r.state.Vfo.Mode {
-			if err := r.updateMode(ns.Vfo.GetMode()); err != nil {
+			if err := r.updateMode(ns.Vfo.GetMode(), ns.Vfo.GetPbWidth()); err != nil {
 				log.Println(err)
 			}
 		}
@@ -90,9 +97,9 @@ func (r *radio) deserializeCatRequest(request []byte) error {
 			}
 		}
 
-		if ns.Vfo.Paramters != nil {
-			if !reflect.DeepEqual(ns.Vfo.Paramters, r.state.Vfo.Paramters) {
-				if err := r.updateParams(ns.Vfo.GetParamters()); err != nil {
+		if ns.Vfo.Parameters != nil {
+			if !reflect.DeepEqual(ns.Vfo.Parameters, r.state.Vfo.Parameters) {
+				if err := r.updateParams(ns.Vfo.GetParameters()); err != nil {
 					log.Println(err)
 				}
 			}
@@ -120,8 +127,7 @@ func (r *radio) updateCurrentVfo(newVfo string) error {
 		if err != nil {
 			return err
 		}
-		r.state.CurrentVfo = newVfo
-		r.state.Vfo.Vfo = newVfo
+		r.queryVfo()
 	} else {
 		return errors.New("unknown Vfo")
 	}
@@ -141,7 +147,7 @@ func (r *radio) updateFrequency(newFreq float64) error {
 func (r *radio) execVfoOperations(vfoOps []string) error {
 	vfo, _ := hl.VfoValue[r.state.CurrentVfo]
 	for _, v := range vfoOps {
-		vfoOpValue, ok := hl.VfoValue[v]
+		vfoOpValue, ok := hl.OperationValue[v]
 		if !ok {
 			return errors.New("unknown VFO Operation")
 		}
@@ -154,9 +160,13 @@ func (r *radio) execVfoOperations(vfoOps []string) error {
 	return nil
 }
 
-func (r *radio) updateMode(newMode string) error {
+func (r *radio) updateMode(newMode string, newPbWidth int32) error {
 	vfo, _ := hl.VfoValue[r.state.CurrentVfo]
+
 	pbWidth := int(r.state.Vfo.PbWidth)
+	if newPbWidth != 0 {
+		pbWidth = int(newPbWidth)
+	}
 	newModeValue, ok := hl.ModeValue[newMode]
 	if !ok {
 		return errors.New("unknown mode")
@@ -166,7 +176,13 @@ func (r *radio) updateMode(newMode string) error {
 		return err
 	}
 
-	r.state.Vfo.Mode = newMode
+	mode, pbWidth, err := r.rig.GetMode(vfo)
+	if err != nil {
+		return err
+	}
+
+	r.state.Vfo.Mode = hl.ModeName[mode]
+	r.state.Vfo.PbWidth = int32(pbWidth)
 
 	return nil
 }
@@ -178,7 +194,14 @@ func (r *radio) updatePbWidth(newPbWidth int32) error {
 	if err != nil {
 		return err
 	}
-	r.state.Vfo.PbWidth = newPbWidth
+
+	mode, pbWidth, err := r.rig.GetMode(vfo)
+	if err != nil {
+		return err
+	}
+
+	r.state.Vfo.Mode = hl.ModeName[mode]
+	r.state.Vfo.PbWidth = int32(pbWidth)
 
 	return nil
 }
@@ -189,7 +212,12 @@ func (r *radio) updateAntenna(newAnt int32) error {
 	if err != nil {
 		return err
 	}
-	r.state.Vfo.Ant = newAnt
+	ant, err := r.rig.GetAnt(vfo)
+	if err != nil {
+		return err
+	}
+
+	r.state.Vfo.Ant = int32(ant)
 
 	return nil
 }
@@ -200,7 +228,12 @@ func (r *radio) updateRit(newRit int32) error {
 	if err != nil {
 		return err
 	}
-	r.state.Vfo.Rit = newRit
+	rit, err := r.rig.GetRit(vfo)
+	if err != nil {
+		return err
+	}
+
+	r.state.Vfo.Rit = int32(rit)
 
 	return nil
 }
@@ -211,7 +244,13 @@ func (r *radio) updateXit(newXit int32) error {
 	if err != nil {
 		return err
 	}
-	r.state.Vfo.Xit = newXit
+
+	xit, err := r.rig.GetXit(vfo)
+	if err != nil {
+		return err
+	}
+
+	r.state.Vfo.Xit = int32(xit)
 
 	return nil
 }
@@ -231,7 +270,20 @@ func (r *radio) updateSplit(newSplit *sbRadio.Split) error {
 			if err != nil {
 				return err
 			}
-			r.state.Vfo.Split.Enabled = newSplit.GetEnabled()
+			r.state.Vfo.Split.Frequency = newSplit.GetFrequency()
+		}
+
+		if newSplit.GetVfo() != r.state.Vfo.Split.Vfo {
+			txVfo, ok := hl.VfoValue[newSplit.GetVfo()]
+			if !ok {
+				return errors.New("unknown split tx vfo")
+			}
+
+			err := r.rig.SetSplitVfo(vfo, utils.Btoi(newSplit.GetEnabled()), txVfo)
+			if err != nil {
+				return err
+			}
+			r.state.Vfo.Split.Vfo = newSplit.GetVfo()
 		}
 
 		if newSplit.GetMode() != r.state.Vfo.Split.Mode {
@@ -265,7 +317,13 @@ func (r *radio) updateTs(newTs int32) error {
 	if err != nil {
 		return err
 	}
-	r.state.Vfo.TuningStep = newTs
+
+	ts, err := r.rig.GetTs(vfo)
+	if err != nil {
+		return err
+	}
+
+	r.state.Vfo.TuningStep = int32(ts)
 
 	return nil
 }
@@ -284,6 +342,8 @@ func (r *radio) updateFunctions(newFuncs []string) error {
 		if err != nil {
 			return err
 		}
+
+		r.state.Vfo.Functions = append(r.state.Vfo.Functions, f)
 	}
 
 	// functions to be disabled
@@ -297,6 +357,8 @@ func (r *radio) updateFunctions(newFuncs []string) error {
 		if err != nil {
 			return err
 		}
+
+		r.state.Vfo.Functions = utils.RemoveStringFromSlice(f, r.state.Vfo.Functions)
 	}
 
 	return nil
@@ -333,7 +395,7 @@ func (r *radio) updateParams(newParams map[string]float32) error {
 		if !ok {
 			return errors.New("unknown Parameter")
 		}
-		if _, ok := r.state.Vfo.Paramters[k]; !ok {
+		if _, ok := r.state.Vfo.Parameters[k]; !ok {
 			return errors.New("unsupported Parameter for this rig")
 		}
 		if r.state.Vfo.Levels[k] != v {
@@ -361,11 +423,13 @@ func (r *radio) updatePowerOn(pwrOn bool) error {
 		return err
 	}
 
+	r.state.RadioOn = pwrOn
+
 	return nil
 }
 
 func (r *radio) updatePtt(ptt bool) error {
-
+	vfo, _ := hl.VfoValue[r.state.CurrentVfo]
 	var pttValue int
 	if ptt {
 		pttValue = hl.RIG_PTT_ON
@@ -373,10 +437,12 @@ func (r *radio) updatePtt(ptt bool) error {
 		pttValue = hl.RIG_PTT_OFF
 	}
 
-	err := r.rig.SetPowerStat(pttValue)
+	err := r.rig.SetPtt(vfo, pttValue)
 	if err != nil {
 		return err
 	}
+
+	r.state.Ptt = ptt
 
 	return nil
 }

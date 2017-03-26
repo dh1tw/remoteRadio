@@ -11,16 +11,17 @@ import (
 
 // internal
 const (
-	MqttConnStatus    = "mqttConnStatus"    // int
-	ForwardCat        = "forwardAudio"      //bool
-	Shutdown          = "shutdown"          // bool
-	OsExit            = "osExit"            // bool
+	MqttConnStatus = "mqttConnStatus" // int
+	ForwardCat     = "forwardAudio"   //bool
+	Cli            = "cli"            // []string
+	Shutdown       = "shutdown"       // bool
+	OsExit         = "osExit"         // bool
 )
 
 // for message handling
 const (
-	ServerOnline         = "serverOnline" //bool
-	Ping                 = "ping"         // int64
+	ServerOnline = "serverOnline" //bool
+	Ping         = "ping"         // int64
 )
 
 func WatchSystemEvents(evPS *pubsub.PubSub) {

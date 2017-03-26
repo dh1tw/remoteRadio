@@ -1,6 +1,8 @@
 package radio
 
 import (
+	"fmt"
+
 	hl "github.com/dh1tw/goHamlib"
 	sbRadio "github.com/dh1tw/remoteRadio/sb_radio"
 )
@@ -18,6 +20,7 @@ func (r *radio) serializeCaps() (msg []byte, err error) {
 	caps.Vfos = r.rig.Caps.Vfos
 	caps.Modes = r.rig.Caps.Modes
 	caps.VfoOps = r.rig.Caps.Operations
+	fmt.Println(caps.VfoOps)
 	caps.GetFunctions = r.rig.Caps.GetFunctions
 	caps.SetFunctions = r.rig.Caps.SetFunctions
 	caps.GetLevels = hlValuesToPbValues(r.rig.Caps.SetLevels)

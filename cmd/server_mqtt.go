@@ -87,6 +87,8 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 	mqttBrokerPort := viper.GetInt("mqtt.broker_port")
 	mqttClientID := viper.GetString("general.user_id")
 
+	hlDebugLevel := viper.GetInt("radio.hl-debug-level")
+
 	baseTopic := viper.GetString("mqtt.station") +
 		"/radios/" + viper.GetString("mqtt.radio") +
 		"/cat"
@@ -98,7 +100,7 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 
 	// tx topics
 	serverCatResponseTopic := baseTopic + "/state"
-	serverCapsTopic := baseTopic + "/capabilities"
+	serverCapsTopic := baseTopic + "/caps"
 	serverPongTopic := baseTopic + "/pong"
 
 	mqttRxTopics := []string{serverCatRequestTopic, serverPingTopic}
@@ -150,10 +152,13 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 	}
 
 	rigModel := viper.GetInt("radio.rig-model")
+
 	port := hl.Port{}
 	port.Baudrate = viper.GetInt("radio.baudrate")
 	port.Databits = viper.GetInt("radio.databits")
 	port.Stopbits = viper.GetInt("radio.stopbits")
+	port.Portname = viper.GetString("radio.portname")
+	port.RigPortType = hl.RIG_PORT_SERIAL
 	switch viper.GetString("radio.parity") {
 	case "none":
 		port.Parity = hl.N
@@ -177,6 +182,7 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 	radioSettings := radio.RadioSettings{
 		RigModel:         rigModel,
 		Port:             port,
+		HlDebugLevel:     hlDebugLevel,
 		CatRequestCh:     toDeserializeCatRequestCh,
 		ToWireCh:         toWireCh,
 		CatResponseTopic: serverCatResponseTopic,

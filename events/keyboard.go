@@ -2,8 +2,8 @@ package events
 
 import (
 	"bufio"
-	"fmt"
 	"os"
+	"strings"
 
 	"github.com/cskr/pubsub"
 )
@@ -16,7 +16,7 @@ func CaptureKeyboard(evPS *pubsub.PubSub) {
 		if scanner.Scan() {
 			switch scanner.Text() {
 			default:
-				fmt.Println("keyboard input:", scanner.Text())
+				evPS.Pub(strings.Fields(scanner.Text()), Cli)
 			}
 		}
 	}

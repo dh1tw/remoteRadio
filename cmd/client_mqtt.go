@@ -22,37 +22,140 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"sync"
+	"time"
 
+	"github.com/cskr/pubsub"
+	"github.com/dh1tw/remoteRadio/comms"
+	"github.com/dh1tw/remoteRadio/events"
+	"github.com/dh1tw/remoteRadio/radio"
+	"github.com/dh1tw/remoteRadio/utils"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 // mqttCmd represents the mqtt command
-var mqttCmd = &cobra.Command{
+var clientMqttCmd = &cobra.Command{
 	Use:   "mqtt",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// TODO: Work your own magic here
-		fmt.Println("mqtt called")
-	},
+	Short: "MQTT CLI Client for a remote Radio",
+	Long:  `MQTT CLI Client for a remote Radio`,
+	Run:   mqttCliClient,
 }
 
 func init() {
-	clientCmd.AddCommand(mqttCmd)
+	clientCmd.AddCommand(clientMqttCmd)
+	clientMqttCmd.Flags().StringP("broker-url", "u", "localhost", "Broker URL")
+	clientMqttCmd.Flags().IntP("broker-port", "p", 1883, "Broker Port")
+	clientMqttCmd.Flags().StringP("station", "X", "mystation", "Your station callsign")
+	clientMqttCmd.Flags().StringP("radio", "Y", "myradio", "Radio ID")
+}
 
-	// Here you will define your flags and configuration settings.
+func mqttCliClient(cmd *cobra.Command, args []string) {
 
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// mqttCmd.PersistentFlags().String("foo", "", "A help for foo")
+	// If a config file is found, read it in.
+	if err := viper.ReadInConfig(); err == nil {
+		fmt.Println("Using config file:", viper.ConfigFileUsed())
+	}
 
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// mqttCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// bind the pflags to viper settings
+	viper.BindPFlag("mqtt.broker_url", cmd.Flags().Lookup("broker-url"))
+	viper.BindPFlag("mqtt.broker_port", cmd.Flags().Lookup("broker-port"))
+	viper.BindPFlag("mqtt.station", cmd.Flags().Lookup("station"))
+	viper.BindPFlag("mqtt.radio", cmd.Flags().Lookup("radio"))
 
+	if viper.GetString("general.user_id") == "" {
+		viper.Set("general.user_id", utils.RandStringRunes(10))
+	}
+
+	mqttBrokerURL := viper.GetString("mqtt.broker_url")
+	mqttBrokerPort := viper.GetInt("mqtt.broker_port")
+	mqttClientID := viper.GetString("general.user_id")
+
+	baseTopic := viper.GetString("mqtt.station") +
+		"/radios/" + viper.GetString("mqtt.radio") +
+		"/cat"
+
+	serverCatRequestTopic := baseTopic + "/setstate"
+	serverStatusTopic := baseTopic + "/status"
+	//	serverPingTopic := baseTopic + "/ping"
+	// errorTopic := baseTopic + "/error"
+
+	// tx topics
+	serverCatResponseTopic := baseTopic + "/state"
+	serverCapsTopic := baseTopic + "/caps"
+	serverPongTopic := baseTopic + "/pong"
+
+	mqttRxTopics := []string{serverCatResponseTopic, serverCapsTopic, serverPongTopic, serverStatusTopic}
+
+	toWireCh := make(chan comms.IOMsg, 20)
+	toDeserializeCatResponseCh := make(chan []byte, 10)
+	toDeserializePingResponseCh := make(chan []byte, 10)
+	toDeserializeCapsCh := make(chan []byte, 5)
+	toDeserializeStatusCh := make(chan []byte, 5)
+
+	// Event PubSub
+	evPS := pubsub.New(1)
+
+	// WaitGroup to coordinate a graceful shutdown
+	var wg sync.WaitGroup
+
+	mqttSettings := comms.MqttSettings{
+		WaitGroup:  &wg,
+		Transport:  "tcp",
+		BrokerURL:  mqttBrokerURL,
+		BrokerPort: mqttBrokerPort,
+		ClientID:   mqttClientID,
+		Topics:     mqttRxTopics,
+		ToDeserializeCatResponseCh:  toDeserializeCatResponseCh,
+		ToDeserializeCatRequestCh:   toDeserializePingResponseCh,
+		ToDeserializeCapabilitiesCh: toDeserializeCapsCh,
+		ToDeserializeStatusCh:       toDeserializeStatusCh,
+		ToWire:                      toWireCh,
+		Events:                      evPS,
+		LastWill:                    nil,
+	}
+
+	remoteRadioSettings := radio.RemoteRadioSettings{
+		CatResponseCh:   toDeserializeCatResponseCh,
+		RadioStatusCh:   toDeserializeStatusCh,
+		CapabilitiesCh:  toDeserializeCapsCh,
+		ToWireCh:        toWireCh,
+		CatRequestTopic: serverCatRequestTopic,
+		Events:          evPS,
+		WaitGroup:       &wg,
+	}
+
+	wg.Add(2) //MQTT + RemoteRadio
+
+	go events.WatchSystemEvents(evPS)
+	go radio.HandleRemoteRadio(remoteRadioSettings)
+	time.Sleep(200 * time.Millisecond)
+	go comms.MqttClient(mqttSettings)
+	go events.CaptureKeyboard(evPS)
+
+	connectionStatusCh := evPS.Sub(events.MqttConnStatus)
+	osExitCh := evPS.Sub(events.OsExit)
+	shutdownCh := evPS.Sub(events.Shutdown)
+
+	for {
+		select {
+
+		// CTRL-C has been pressed; let's prepare the shutdown
+		case <-osExitCh:
+			// advice that we are going offline
+			time.Sleep(time.Millisecond * 200)
+			evPS.Pub(true, events.Shutdown)
+
+		// shutdown the application gracefully
+		case <-shutdownCh:
+			wg.Wait()
+			os.Exit(0)
+
+		case ev := <-connectionStatusCh:
+			connStatus := ev.(int)
+			if connStatus == comms.CONNECTED {
+			}
+		}
+	}
 }

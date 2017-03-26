@@ -35,3 +35,30 @@ func StringMapDiff(map1 map[string]float64, map2 map[string]float64) []string {
 	}
 	return diff
 }
+
+func StringInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
+
+func Int32InSlice(a int32, list []int32) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
+
+func RemoveStringFromSlice(el string, slice []string) []string {
+	for i, v := range slice {
+		if v == el {
+			return append(slice[:i], slice[i+1:]...)
+		}
+	}
+	return slice
+}

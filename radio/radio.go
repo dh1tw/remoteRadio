@@ -2,18 +2,21 @@ package radio
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 
 	"github.com/cskr/pubsub"
 	hl "github.com/dh1tw/goHamlib"
 	"github.com/dh1tw/remoteRadio/comms"
+	"github.com/dh1tw/remoteRadio/events"
 	sbRadio "github.com/dh1tw/remoteRadio/sb_radio"
 )
 
 type RadioSettings struct {
 	RigModel         int
 	Port             hl.Port
+	HlDebugLevel     int
 	CatRequestCh     chan []byte
 	ToWireCh         chan comms.IOMsg
 	CatResponseTopic string
@@ -32,6 +35,8 @@ func HandleRadio(rs RadioSettings) {
 
 	defer rs.WaitGroup.Done()
 
+	shutdownCh := rs.Events.Sub(events.Shutdown)
+
 	r := radio{}
 	r.rig = hl.Rig{}
 	r.state = sbRadio.State{}
@@ -39,13 +44,17 @@ func HandleRadio(rs RadioSettings) {
 	r.state.Channel = &sbRadio.Channel{}
 	r.settings = &rs
 
-	// err := r.rig.SetPort(rs.Port)
-	// if err != nil {
-	// 	log.Println(err)
-	// 	return
-	// }
+	fmt.Println(rs.Port)
 
 	err := r.rig.Init(rs.RigModel)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	r.rig.SetDebugLevel(rs.HlDebugLevel)
+
+	err = r.rig.SetPort(rs.Port)
 	if err != nil {
 		log.Println(err)
 		return
@@ -71,6 +80,14 @@ func HandleRadio(rs RadioSettings) {
 		select {
 		case msg := <-rs.CatRequestCh:
 			r.deserializeCatRequest(msg)
+			r.sendState()
+
+		case <-shutdownCh:
+			log.Println("Disconnecting from Radio")
+			// maybe we have to check if the connection is really open
+			r.rig.Close()
+			r.rig.Cleanup()
+			return
 		}
 	}
 }
@@ -129,42 +146,50 @@ func (r *radio) queryVfo() error {
 	}
 	r.state.Vfo.Xit = int32(xit)
 
-	splitOn, txVfo, err := r.rig.GetSplit(vfo)
-	if err != nil {
-		return err
-	}
+	// splitOn, txVfo, err := r.rig.GetSplit(vfo)
+	// if err != nil {
+	// 	return err
+	// }
 
-	txFreq, err := r.rig.GetSplitFreq(vfo)
-	if err != nil {
-		return err
-	}
+	// fmt.Println("SplitOn", splitOn)
+	// fmt.Println("Split TXVfo:", txVfo)
 
-	txMode, txPbWidth, err := r.rig.GetSplitMode(vfo)
-	if err != nil {
-		return err
-	}
+	// txFreq, err := r.rig.GetSplitFreq(vfo)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// fmt.Println("Split Freq:", txFreq)
+
+	// txMode, txPbWidth, err := r.rig.GetSplitMode(vfo)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// fmt.Println("Split Mode:", txMode)
+	// fmt.Println("Split PbWidth:", txPbWidth)
 
 	split := sbRadio.Split{}
-	if splitOn == 1 {
-		split.Enabled = true
-	} else {
-		split.Enabled = false
-	}
+	// if splitOn == hl.RIG_SPLIT_ON {
+	// 	split.Enabled = true
+	// } else {
+	// 	split.Enabled = false
+	// }
 
-	split.Frequency = txFreq
-	if txVfoName, ok := hl.VfoName[txVfo]; ok {
-		split.Vfo = txVfoName
-	} else {
-		return errors.New("unknown Vfo Name")
-	}
+	// split.Frequency = txFreq
+	// if txVfoName, ok := hl.VfoName[txVfo]; ok {
+	// 	split.Vfo = txVfoName
+	// } else {
+	// 	return errors.New("unknown Vfo Name")
+	// }
 
-	if txModeName, ok := hl.ModeName[txMode]; ok {
-		split.Mode = txModeName
-	} else {
-		return errors.New("unknown Mode")
-	}
+	// if txModeName, ok := hl.ModeName[txMode]; ok {
+	// 	split.Mode = txModeName
+	// } else {
+	// 	return errors.New("unknown Mode")
+	// }
 
-	split.PbWidth = uint32(txPbWidth)
+	// split.PbWidth = uint32(txPbWidth)
 
 	r.state.Vfo.Split = &split
 
@@ -196,13 +221,13 @@ func (r *radio) queryVfo() error {
 		r.state.Vfo.Levels[level.Name] = lValue
 	}
 
-	r.state.Vfo.Paramters = make(map[string]float32)
+	r.state.Vfo.Parameters = make(map[string]float32)
 	for _, param := range r.rig.Caps.GetParameters {
 		pValue, err := r.rig.GetParm(vfo, hl.ParmValue[param.Name])
 		if err != nil {
 			return err
 		}
-		r.state.Vfo.Paramters[param.Name] = pValue
+		r.state.Vfo.Parameters[param.Name] = pValue
 	}
 
 	return nil

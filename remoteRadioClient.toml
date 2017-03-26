@@ -1,0 +1,18 @@
+[general]
+user_id = "dh1tw_ubuntu"
+
+[mqtt]
+broker_url = "localhost"
+#broker_url = "test.mosquitto.org"
+broker_port = 1883
+station = "dh1tw"
+radio = "ft950"
+
+[radio]
+rig-model = 128
+baudrate = 38400
+portname = "/dev/mhuxd/cat"
+databits = 8
+stopbits = 1
+parity = "none"
+handshake = "none"
