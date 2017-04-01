@@ -5,6 +5,8 @@ import (
 	"math"
 	"strconv"
 
+	"strings"
+
 	sbRadio "github.com/dh1tw/remoteRadio/sb_radio"
 	"github.com/dh1tw/remoteRadio/utils"
 )
@@ -48,11 +50,27 @@ func (r *remoteRadio) populateCliCmds() {
 	r.cliCmds["l"] = getLevel
 	r.cliCmds["get_level"] = getLevel
 	r.cliCmds["L"] = setLevel
+	r.cliCmds["n"] = getTuningStep
+	r.cliCmds["N"] = setTuningStep
 	r.cliCmds["set_level"] = setLevel
 	r.cliCmds["get_powerstat"] = getPowerStat
 	r.cliCmds["set_powerstat"] = setPowerStat
+	r.cliCmds["s"] = getSplit
 	r.cliCmds["get_split"] = getSplit
+	r.cliCmds["S"] = setSplit
 	r.cliCmds["set_split"] = setSplit
+	r.cliCmds["i"] = getSplit
+	r.cliCmds["get_split_freq"] = getSplit
+	r.cliCmds["I"] = setSplitFreq
+	r.cliCmds["set_split_freq"] = setSplitFreq
+	r.cliCmds["x"] = getSplit
+	r.cliCmds["get_split_mode"] = getSplit
+	r.cliCmds["X"] = setSplitMode
+	r.cliCmds["set_split_mode"] = setSplitMode
+	r.cliCmds["k"] = getSplit
+	r.cliCmds["get_split_freq_mode"] = getSplit
+	r.cliCmds["K"] = setSplitFreqMode
+	r.cliCmds["set_split_freq_mode"] = setSplitFreqMode
 	r.cliCmds["3"] = dumpCaps
 	r.cliCmds["5"] = dumpState
 	r.cliCmds["?"] = printHelp
@@ -63,14 +81,14 @@ func (r *remoteRadio) populateCliCmds() {
 func (r *remoteRadio) parseCli(cliCmd []string) {
 
 	if len(cliCmd) == 0 {
-		fmt.Printf(">")
+		fmt.Printf("Rig command: ")
 		return
 	}
 
 	f, ok := r.cliCmds[cliCmd[0]]
 	if !ok {
 		fmt.Println("unknown command")
-		fmt.Printf(">")
+		fmt.Printf("Rig command: ")
 		return
 	}
 	f(r, cliCmd[1:])
@@ -78,7 +96,7 @@ func (r *remoteRadio) parseCli(cliCmd []string) {
 
 func getFrequency(r *remoteRadio, args []string) {
 	fmt.Println(r.state.Vfo.Frequency)
-	fmt.Printf(">")
+	fmt.Printf("Rig command: ")
 }
 
 func setFrequency(r *remoteRadio, args []string) {
@@ -93,8 +111,10 @@ func setFrequency(r *remoteRadio, args []string) {
 		return
 	}
 
-	req := r.deepCopyState()
+	// req := r.deepCopyState()
+	req := r.initSetState()
 	req.Vfo.Frequency = freq
+	req.Md.HasFrequency = true
 	if err := r.sendCatRequest(req); err != nil {
 		fmt.Println(err)
 	}
@@ -102,7 +122,7 @@ func setFrequency(r *remoteRadio, args []string) {
 
 func getMode(r *remoteRadio, args []string) {
 	fmt.Println(r.state.Vfo.Mode)
-	fmt.Printf(">")
+	fmt.Printf("Rig command: ")
 }
 
 func setMode(r *remoteRadio, args []string) {
@@ -112,13 +132,16 @@ func setMode(r *remoteRadio, args []string) {
 		return
 	}
 
-	if ok := utils.StringInSlice(args[0], r.caps.Modes); !ok {
+	mode := strings.ToUpper(args[0])
+
+	if ok := utils.StringInSlice(mode, r.caps.Modes); !ok {
 		fmt.Println("unsupported Mode")
 		return
 	}
 
-	req := r.deepCopyState()
-	req.Vfo.Mode = args[0]
+	req := r.initSetState()
+	req.Vfo.Mode = mode
+	req.Md.HasMode = true
 
 	if len(args) == 2 {
 
@@ -127,7 +150,7 @@ func setMode(r *remoteRadio, args []string) {
 			fmt.Println("passband width must be integer")
 		}
 
-		filters, ok := r.caps.Filters[args[0]]
+		filters, ok := r.caps.Filters[mode]
 		if !ok {
 			fmt.Println("WARN: No Filters found for this Mode in Rig Caps")
 		}
@@ -135,6 +158,7 @@ func setMode(r *remoteRadio, args []string) {
 			fmt.Println("WARN: unspported passband width")
 		}
 		req.Vfo.PbWidth = int32(pbWidth)
+		req.Md.HasPbWidth = true
 	}
 
 	if err := r.sendCatRequest(req); err != nil {
@@ -143,8 +167,8 @@ func setMode(r *remoteRadio, args []string) {
 }
 
 func getVfo(r *remoteRadio, args []string) {
-	fmt.Println("Current Vfo:", r.state.Vfo)
-	fmt.Printf(">")
+	fmt.Println("Current Vfo:", r.state.CurrentVfo)
+	fmt.Printf("Rig command: ")
 }
 
 func setVfo(r *remoteRadio, args []string) {
@@ -152,15 +176,14 @@ func setVfo(r *remoteRadio, args []string) {
 		return
 	}
 
-	vfo := args[0]
+	vfo := strings.ToUpper(args[0])
+
 	if ok := utils.StringInSlice(vfo, r.caps.Vfos); !ok {
 		fmt.Println("unsupported VFO")
 		return
 	}
 
-	req := sbRadio.SetState{}
-	req.Ptt = r.state.Ptt
-	req.RadioOn = r.state.RadioOn
+	req := r.initSetState()
 	req.CurrentVfo = vfo
 
 	if err := r.sendCatRequest(req); err != nil {
@@ -170,7 +193,7 @@ func setVfo(r *remoteRadio, args []string) {
 
 func getRit(r *remoteRadio, args []string) {
 	fmt.Println("Rit:", r.state.Vfo.Rit)
-	fmt.Printf(">")
+	fmt.Printf("Rig command: ")
 }
 
 func setRit(r *remoteRadio, args []string) {
@@ -189,8 +212,10 @@ func setRit(r *remoteRadio, args []string) {
 		fmt.Println("WARN: Rit value larger than supported by Rig")
 	}
 
-	req := r.deepCopyState()
+	req := r.initSetState()
 	req.Vfo.Rit = int32(rit)
+	req.Md.HasRit = true
+
 	if err := r.sendCatRequest(req); err != nil {
 		fmt.Println(err)
 	}
@@ -198,7 +223,7 @@ func setRit(r *remoteRadio, args []string) {
 
 func getXit(r *remoteRadio, args []string) {
 	fmt.Println("Xit:", r.state.Vfo.Xit)
-	fmt.Printf(">")
+	fmt.Printf("Rig command: ")
 }
 
 func setXit(r *remoteRadio, args []string) {
@@ -217,9 +242,11 @@ func setXit(r *remoteRadio, args []string) {
 		fmt.Println("WARN: Xit value larger than supported by Rig")
 	}
 
-	req := r.deepCopyState()
+	req := r.initSetState()
 
 	req.Vfo.Xit = int32(xit)
+	req.Md.HasXit = true
+
 	if err := r.sendCatRequest(req); err != nil {
 		fmt.Println(err)
 	}
@@ -227,7 +254,7 @@ func setXit(r *remoteRadio, args []string) {
 
 func getAnt(r *remoteRadio, args []string) {
 	fmt.Println("Antenna:", r.state.Vfo.Ant)
-	fmt.Println(">")
+	fmt.Println("Rig command: ")
 }
 
 func setAnt(r *remoteRadio, args []string) {
@@ -242,8 +269,9 @@ func setAnt(r *remoteRadio, args []string) {
 	}
 
 	// check Antenna in CAPS
-	req := r.deepCopyState()
+	req := r.initSetState()
 	req.Vfo.Ant = int32(ant)
+	req.Md.HasAnt = true
 
 	if err := r.sendCatRequest(req); err != nil {
 		fmt.Println(err)
@@ -252,7 +280,7 @@ func setAnt(r *remoteRadio, args []string) {
 
 func getPowerStat(r *remoteRadio, args []string) {
 	fmt.Println("Power On:", r.state.RadioOn)
-	fmt.Printf(">")
+	fmt.Printf("Rig command: ")
 }
 
 func setPowerStat(r *remoteRadio, args []string) {
@@ -266,10 +294,9 @@ func setPowerStat(r *remoteRadio, args []string) {
 		return
 	}
 
-	req := sbRadio.SetState{}
-	req.CurrentVfo = r.state.CurrentVfo
-	req.Ptt = r.state.Ptt
+	req := r.initSetState()
 	req.RadioOn = power
+	req.Md.HasRadioOn = true
 
 	if err := r.sendCatRequest(req); err != nil {
 		fmt.Println(err)
@@ -278,7 +305,7 @@ func setPowerStat(r *remoteRadio, args []string) {
 
 func getPtt(r *remoteRadio, args []string) {
 	fmt.Println("PTT On:", r.state.Ptt)
-	fmt.Printf(">")
+	fmt.Printf("Rig command: ")
 }
 
 func setPtt(r *remoteRadio, args []string) {
@@ -292,10 +319,9 @@ func setPtt(r *remoteRadio, args []string) {
 		return
 	}
 
-	req := sbRadio.SetState{}
-	req.CurrentVfo = r.state.CurrentVfo
+	req := r.initSetState()
 	req.Ptt = ptt
-	req.RadioOn = r.state.RadioOn
+	req.Md.HasPtt = true
 
 	if err := r.sendCatRequest(req); err != nil {
 		fmt.Println(err)
@@ -303,25 +329,8 @@ func setPtt(r *remoteRadio, args []string) {
 }
 
 func getLevel(r *remoteRadio, args []string) {
-	if !checkArgs(args, 1) {
-		fmt.Printf("Available Levels: ")
-		for _, level := range r.caps.GetGetLevels() {
-			fmt.Printf("%s ", level.Name)
-		}
-		fmt.Printf("\n")
-		fmt.Println("> ")
-		return
-	}
-
-	level := args[0]
-
-	val, ok := r.state.Vfo.Levels[level]
-	if !ok {
-		fmt.Println("unknown Level:", level)
-	}
-
-	fmt.Printf("%s: %f\n", level, val)
-	fmt.Printf("> ")
+	r.PrintLevels()
+	fmt.Printf("Rig command: ")
 }
 
 func setLevel(r *remoteRadio, args []string) {
@@ -331,11 +340,11 @@ func setLevel(r *remoteRadio, args []string) {
 			fmt.Printf("%s ", level.Name)
 		}
 		fmt.Printf("\n")
-		fmt.Println("> ")
+		fmt.Println("Rig command: ")
 		return
 	}
 
-	levelName := args[0]
+	levelName := strings.ToUpper(args[0])
 
 	if !valueInValueList(levelName, r.caps.SetLevels) {
 		fmt.Println("unknown Value:", levelName)
@@ -351,9 +360,10 @@ func setLevel(r *remoteRadio, args []string) {
 
 	levelMap[levelName] = float32(levelValue)
 
-	req := r.deepCopyState()
+	req := r.initSetState()
 
 	req.Vfo.Levels = levelMap
+	req.Md.HasLevels = true
 	if err := r.sendCatRequest(req); err != nil {
 		fmt.Println(err)
 	}
@@ -361,19 +371,20 @@ func setLevel(r *remoteRadio, args []string) {
 
 func getFunction(r *remoteRadio, args []string) {
 	fmt.Println("Functions:", r.state.Vfo.Functions)
-	fmt.Printf("> ")
+	fmt.Printf("Rig command: ")
 }
 
 func setFunction(r *remoteRadio, args []string) {
 	if !checkArgs(args, 1) {
 		fmt.Println("Available Functions:", r.caps.SetFunctions)
-		fmt.Printf("> ")
+		fmt.Printf("Rig command: ")
 		return
 	}
 
 	funcName := args[0]
 
-	req := r.deepCopyState()
+	req := r.initSetState()
+	req.Md.HasFunctions = true
 
 	if !utils.StringInSlice(funcName, req.Vfo.Functions) {
 		req.Vfo.Functions = append(req.Vfo.Functions, funcName)
@@ -395,7 +406,7 @@ func getSplit(r *remoteRadio, args []string) {
 		fmt.Println("Split Mode:", r.state.Vfo.Split.Mode)
 		fmt.Println("Split PbWidth:", r.state.Vfo.Split.PbWidth)
 	}
-	fmt.Printf(">")
+	fmt.Printf("Rig command: ")
 }
 
 func setSplit(r *remoteRadio, args []string) {
@@ -409,9 +420,115 @@ func setSplit(r *remoteRadio, args []string) {
 		return
 	}
 
-	req := r.deepCopyState()
+	req := r.initSetState()
+	req.Md.HasSplit = true
 
 	req.Vfo.Split.Enabled = splitEnabled
+	if err := r.sendCatRequest(req); err != nil {
+		fmt.Println(err)
+	}
+}
+
+func setSplitFreq(r *remoteRadio, args []string) {
+	if !checkArgs(args, 1) {
+		return
+	}
+
+	freq, err := strconv.ParseFloat(args[0], 10)
+	if err != nil {
+		fmt.Println("frequency must be float")
+		return
+	}
+
+	req := r.initSetState()
+	req.Vfo.Split.Enabled = true
+	req.Vfo.Split.Frequency = freq
+	req.Md.HasSplit = true
+
+	if err := r.sendCatRequest(req); err != nil {
+		fmt.Println(err)
+	}
+}
+
+func setSplitMode(r *remoteRadio, args []string) {
+	if len(args) < 1 || len(args) > 2 {
+		fmt.Println("wrong number of arguments")
+		return
+	}
+
+	if ok := utils.StringInSlice(args[0], r.caps.Modes); !ok {
+		fmt.Println("unsupported Mode")
+		return
+	}
+
+	req := r.initSetState()
+	req.Vfo.Split.Mode = args[0]
+	req.Md.HasSplit = true
+
+	if len(args) == 2 {
+
+		pbWidth, err := strconv.ParseInt(args[1], 10, 32)
+		if err != nil {
+			fmt.Println("passband width must be integer")
+		}
+
+		filters, ok := r.caps.Filters[args[0]]
+		if !ok {
+			fmt.Println("WARN: No Filters found for this Mode in Rig Caps")
+		}
+		if ok := utils.Int32InSlice(int32(pbWidth), filters.Value); !ok {
+			fmt.Println("WARN: unspported passband width")
+		}
+		req.Vfo.Split.PbWidth = int32(pbWidth)
+	}
+
+	req.Vfo.Split.Enabled = true
+
+	if err := r.sendCatRequest(req); err != nil {
+		fmt.Println(err)
+	}
+}
+
+func setSplitFreqMode(r *remoteRadio, args []string) {
+	if len(args) < 2 || len(args) > 3 {
+		fmt.Println("wrong number of arguments")
+		return
+	}
+
+	freq, err := strconv.ParseFloat(args[0], 10)
+	if err != nil {
+		fmt.Println("frequency must be float")
+		return
+	}
+
+	if ok := utils.StringInSlice(args[1], r.caps.Modes); !ok {
+		fmt.Println("unsupported Mode")
+		return
+	}
+
+	req := r.initSetState()
+	req.Vfo.Split.Enabled = true
+	req.Vfo.Split.Frequency = freq
+	req.Vfo.Split.Mode = args[1]
+	req.Md.HasSplit = true
+
+	if len(args) == 3 {
+
+		pbWidth, err := strconv.ParseInt(args[2], 10, 32)
+		if err != nil {
+			fmt.Println("passband width must be integer")
+		}
+
+		filters, ok := r.caps.Filters[args[2]]
+		if !ok {
+			fmt.Println("WARN: No Filters found for this Mode in Rig Caps")
+		}
+		if ok := utils.Int32InSlice(int32(pbWidth), filters.Value); !ok {
+			fmt.Println("WARN: unspported passband width")
+		}
+		req.Vfo.Split.PbWidth = int32(pbWidth)
+	}
+
 	if err := r.sendCatRequest(req); err != nil {
 		fmt.Println(err)
 	}
@@ -426,10 +543,7 @@ func execVfoOp(r *remoteRadio, args []string) {
 		}
 	}
 
-	req := sbRadio.SetState{}
-	req.CurrentVfo = r.state.CurrentVfo
-	req.Ptt = r.state.Ptt
-	req.RadioOn = r.state.RadioOn
+	req := r.initSetState()
 	req.VfoOperations = args
 
 	if err := r.sendCatRequest(req); err != nil {
@@ -438,14 +552,47 @@ func execVfoOp(r *remoteRadio, args []string) {
 
 }
 
+func getTuningStep(r *remoteRadio, args []string) {
+	fmt.Printf("Tuning Step: %dHz\n", r.state.Vfo.TuningStep)
+	fmt.Printf("Rig command: ")
+}
+
+func setTuningStep(r *remoteRadio, args []string) {
+	if !checkArgs(args, 1) {
+		return
+	}
+
+	req := r.initSetState()
+
+	ts, err := strconv.ParseInt(args[0], 10, 32)
+	if err != nil {
+		fmt.Println("tuning step must be integer")
+	}
+
+	// check if the given tuning step is supported by the rig
+	supportedTs, ok := r.caps.TuningSteps[r.state.Vfo.Mode]
+	if !ok {
+		fmt.Println("WARN: No Tuning step values registered for this mode")
+	}
+	if ok := utils.Int32InSlice(int32(ts), supportedTs.Value); !ok {
+		fmt.Println("WARN: Tuning step not supported for this Mode")
+	}
+	req.Vfo.TuningStep = int32(ts)
+	req.Md.HasTuningStep = true
+
+	if err := r.sendCatRequest(req); err != nil {
+		fmt.Println(err)
+	}
+}
+
 func dumpCaps(r *remoteRadio, args []string) {
 	r.PrintCapabilities()
-	fmt.Printf(">")
+	fmt.Printf("Rig command: ")
 }
 
 func dumpState(r *remoteRadio, args []string) {
 	r.PrintState()
-	fmt.Printf(">")
+	fmt.Printf("Rig command: ")
 }
 
 func printHelp(r *remoteRadio, args []string) {

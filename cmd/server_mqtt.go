@@ -55,6 +55,7 @@ func init() {
 	serverMqttCmd.Flags().IntP("broker-port", "p", 1883, "Broker Port")
 	serverMqttCmd.Flags().StringP("station", "X", "mystation", "Your station callsign")
 	serverMqttCmd.Flags().StringP("radio", "Y", "myradio", "Radio ID")
+	serverMqttCmd.Flags().DurationP("polling_interval", "t", time.Duration(time.Millisecond*100), "Timer for polling the rig")
 }
 
 func mqttRadioServer(cmd *cobra.Command, args []string) {
@@ -69,6 +70,7 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 	viper.BindPFlag("mqtt.broker_port", cmd.Flags().Lookup("broker-port"))
 	viper.BindPFlag("mqtt.station", cmd.Flags().Lookup("station"))
 	viper.BindPFlag("mqtt.radio", cmd.Flags().Lookup("radio"))
+	viper.BindPFlag("radio.polling_interval", cmd.Flags().Lookup("polling_interval"))
 
 	if viper.GetString("general.user_id") == "" {
 		viper.Set("general.user_id", utils.RandStringRunes(10))
@@ -179,6 +181,8 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 		port.Handshake = hl.NO_HANDSHAKE
 	}
 
+	pollingInterval := viper.GetDuration("radio.polling_interval")
+
 	radioSettings := radio.RadioSettings{
 		RigModel:         rigModel,
 		Port:             port,
@@ -189,6 +193,7 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 		CapsTopic:        serverCapsTopic,
 		WaitGroup:        &wg,
 		Events:           evPS,
+		PollingInterval:  pollingInterval,
 	}
 
 	wg.Add(2) //MQTT + Ping + Radio
@@ -243,15 +248,7 @@ type serverStatus struct {
 	topic  string
 }
 
-// func (status *serverStatus) clearPing() {
-// 	status.pingOrigin = ""
-// 	status.pong = -1
-// }
-
 func (status *serverStatus) sendUpdate(toWireCh chan comms.IOMsg) error {
-
-	// now := time.Now().Unix()
-	// defer status.clearPing()
 
 	msg := sbRadio.Status{}
 	msg.Online = status.online

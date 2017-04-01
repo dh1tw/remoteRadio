@@ -2,9 +2,10 @@ package radio
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"sync"
+
+	"time"
 
 	"github.com/cskr/pubsub"
 	hl "github.com/dh1tw/goHamlib"
@@ -23,12 +24,14 @@ type RadioSettings struct {
 	CapsTopic        string
 	WaitGroup        *sync.WaitGroup
 	Events           *pubsub.PubSub
+	PollingInterval  time.Duration
 }
 
 type radio struct {
-	rig      hl.Rig
-	state    sbRadio.State
-	settings *RadioSettings
+	rig           hl.Rig
+	state         sbRadio.State
+	settings      *RadioSettings
+	pollingTicker *time.Ticker
 }
 
 func HandleRadio(rs RadioSettings) {
@@ -44,7 +47,7 @@ func HandleRadio(rs RadioSettings) {
 	r.state.Channel = &sbRadio.Channel{}
 	r.settings = &rs
 
-	fmt.Println(rs.Port)
+	//	log.Println("Opening Port:", rs.Port)
 
 	err := r.rig.Init(rs.RigModel)
 	if err != nil {
@@ -76,6 +79,8 @@ func HandleRadio(rs RadioSettings) {
 		log.Println(err)
 	}
 
+	r.pollingTicker = time.NewTicker(r.settings.PollingInterval)
+
 	for {
 		select {
 		case msg := <-rs.CatRequestCh:
@@ -88,6 +93,9 @@ func HandleRadio(rs RadioSettings) {
 			r.rig.Close()
 			r.rig.Cleanup()
 			return
+
+		case <-r.pollingTicker.C:
+			r.updateMeter()
 		}
 	}
 }
@@ -98,7 +106,6 @@ func (r *radio) queryVfo() error {
 		return err
 	}
 	r.state.CurrentVfo = hl.VfoName[vfo]
-	r.state.Vfo.Vfo = hl.VfoName[vfo]
 
 	if pwrOn, err := r.rig.GetPowerStat(); err != nil {
 		return err
@@ -146,50 +153,46 @@ func (r *radio) queryVfo() error {
 	}
 	r.state.Vfo.Xit = int32(xit)
 
-	// splitOn, txVfo, err := r.rig.GetSplit(vfo)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// fmt.Println("SplitOn", splitOn)
-	// fmt.Println("Split TXVfo:", txVfo)
-
-	// txFreq, err := r.rig.GetSplitFreq(vfo)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// fmt.Println("Split Freq:", txFreq)
-
-	// txMode, txPbWidth, err := r.rig.GetSplitMode(vfo)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// fmt.Println("Split Mode:", txMode)
-	// fmt.Println("Split PbWidth:", txPbWidth)
-
 	split := sbRadio.Split{}
-	// if splitOn == hl.RIG_SPLIT_ON {
-	// 	split.Enabled = true
-	// } else {
-	// 	split.Enabled = false
-	// }
 
-	// split.Frequency = txFreq
-	// if txVfoName, ok := hl.VfoName[txVfo]; ok {
-	// 	split.Vfo = txVfoName
-	// } else {
-	// 	return errors.New("unknown Vfo Name")
-	// }
+	splitOn, txVfo, err := r.rig.GetSplit(vfo)
+	if err != nil {
+		return err
+	}
 
-	// if txModeName, ok := hl.ModeName[txMode]; ok {
-	// 	split.Mode = txModeName
-	// } else {
-	// 	return errors.New("unknown Mode")
-	// }
+	if splitOn == hl.RIG_SPLIT_ON {
+		split.Enabled = true
+	} else {
+		split.Enabled = false
+	}
 
-	// split.PbWidth = uint32(txPbWidth)
+	if splitOn == hl.RIG_SPLIT_ON {
+
+		txFreq, err := r.rig.GetSplitFreq(txVfo)
+		if err != nil {
+			return err
+		}
+
+		txMode, txPbWidth, err := r.rig.GetSplitMode(txVfo)
+		if err != nil {
+			return err
+		}
+		split.Frequency = txFreq
+		if txVfoName, ok := hl.VfoName[txVfo]; ok {
+			split.Vfo = txVfoName
+		} else {
+			return errors.New("unknown Vfo Name")
+		}
+
+		if txModeName, ok := hl.ModeName[txMode]; ok {
+			split.Mode = txModeName
+		} else {
+			return errors.New("unknown Mode")
+		}
+
+		split.PbWidth = int32(txPbWidth)
+
+	}
 
 	r.state.Vfo.Split = &split
 
@@ -258,6 +261,53 @@ func (r *radio) sendCaps() error {
 		r.settings.ToWireCh <- capsMsg
 	} else {
 		log.Println(err)
+	}
+
+	return nil
+}
+
+func (r *radio) updateMeter() error {
+	vfo := hl.VfoValue[r.state.CurrentVfo]
+
+	newValueAvailable := false
+
+	if r.state.Ptt {
+		swr, err := r.rig.GetLevel(vfo, hl.RIG_LEVEL_SWR)
+		if err != nil {
+			return err
+		}
+
+		alc, err := r.rig.GetLevel(vfo, hl.RIG_LEVEL_ALC)
+		if err != nil {
+			return err
+		}
+
+		if r.state.Vfo.Levels["SWR"] != swr {
+			r.state.Vfo.Levels["SWR"] = swr
+			newValueAvailable = true
+		}
+
+		if r.state.Vfo.Levels["ALC"] != alc {
+			r.state.Vfo.Levels["ALC"] = alc
+			newValueAvailable = true
+		}
+	} else {
+		strength, err := r.rig.GetLevel(vfo, hl.RIG_LEVEL_STRENGTH)
+		if err != nil {
+			return err
+		}
+
+		if r.state.Vfo.Levels["STRENGTH"] != strength {
+			r.state.Vfo.Levels["STRENGTH"] = strength
+			newValueAvailable = true
+		}
+	}
+
+	if newValueAvailable {
+		err := r.sendState()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

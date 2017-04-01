@@ -8,6 +8,7 @@ message State{  // Rig State
     Channel channel = 3;
     bool radio_on = 4;
     bool ptt = 5;
+    int32 meter_update_rate = 6; // ms
 }
 
 message SetState{
@@ -17,6 +18,7 @@ message SetState{
     repeated string vfo_operations = 4;
     bool radio_on = 5;
     bool ptt = 6;
+    MetaData md = 7;
 }
 
 message Capabilities{
@@ -47,7 +49,6 @@ message Status{
 }
 
 message Vfo{
-    string vfo = 1;
     double frequency = 2;
     string mode = 3;
     int32 pb_width = 4;
@@ -59,6 +60,22 @@ message Vfo{
     repeated string functions = 13;
     map<string,float> levels = 14;
     map<string,float> parameters = 15;
+}
+
+message MetaData{
+    bool has_frequency = 1;
+    bool has_mode = 2;
+    bool has_pb_width = 3;
+    bool has_ant = 4;
+    bool has_rit = 5;
+    bool has_xit = 6;
+    bool has_split = 7;
+    bool has_tuning_step = 8;
+    bool has_functions = 9;
+    bool has_levels = 10;
+    bool has_parameters = 11;
+    bool has_ptt = 12;
+    bool has_radio_on = 13;
 }
 
 message Channel{
@@ -92,7 +109,7 @@ message Split{
   string vfo = 2;
   double frequency = 3;
   string mode = 4;
-  uint32 pbWidth = 5;
+  int32 pbWidth = 5;
 }
 
 // enum OPERATION {

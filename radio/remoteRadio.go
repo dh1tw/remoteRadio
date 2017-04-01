@@ -92,9 +92,6 @@ func (r *remoteRadio) sendCatRequest(req sbRadio.SetState) error {
 var stateTmpl = template.Must(template.New("").Parse(
 	`
 Current Vfo: {{.CurrentVfo}}
-Radio Powered: {{.RadioOn}}
-Ptt: {{.Ptt}}
-Vfo: {{.Vfo.Vfo}}
   Frequency: {{.Vfo.Frequency}}Hz
   Mode: {{.Vfo.Mode}}
   PBWidth: {{.Vfo.PbWidth}}
@@ -103,15 +100,24 @@ Vfo: {{.Vfo.Vfo}}
   Xit: {{.Vfo.Xit}}
   Split: 
     Enabled: {{.Vfo.Split.Enabled}}
-	Vfo: {{.Vfo.Split.Vfo}}
-	Frequency: {{.Vfo.Split.Frequency}}
-	Mode: {{.Vfo.Split.Mode}}
-	PbWidth: {{.Vfo.Split.PbWidth}}
+    Vfo: {{.Vfo.Split.Vfo}}
+    Frequency: {{.Vfo.Split.Frequency}}
+    Mode: {{.Vfo.Split.Mode}}
+    PbWidth: {{.Vfo.Split.PbWidth}}
   Tuning Step: {{.Vfo.TuningStep}}
   Functions: {{range $f := .Vfo.Functions}}{{$f}} {{end}}
   Levels: {{range $name, $val := .Vfo.Levels}}
     {{$name}}: {{$val}} {{end}}
   Parameters: {{range $name, $val := .Vfo.Parameters}}
+    {{$name}}: {{$val}} {{end}}
+Radio Powered: {{.RadioOn}}
+Ptt: {{.Ptt}}
+`,
+))
+
+var levelsTmpl = template.Must(template.New("").Parse(
+	`
+Levels: {{range $name, $val := .}}
     {{$name}}: {{$val}} {{end}}
 `,
 ))
@@ -152,6 +158,13 @@ func (r *remoteRadio) PrintCapabilities() {
 	}
 }
 
+func (r *remoteRadio) PrintLevels() {
+	err := levelsTmpl.Execute(os.Stdout, r.state.Vfo.Levels)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
 func (r *remoteRadio) PrintState() {
 	err := stateTmpl.Execute(os.Stdout, r.state)
 	if err != nil {
@@ -180,8 +193,6 @@ func (r *remoteRadio) deserializeCatResponse(msg []byte) error {
 		return err
 	}
 
-	fmt.Println(ns)
-
 	if ns.CurrentVfo != r.state.CurrentVfo {
 		r.state.CurrentVfo = ns.CurrentVfo
 		fmt.Println("Current Vfo:", r.state.CurrentVfo)
@@ -192,10 +203,6 @@ func (r *remoteRadio) deserializeCatResponse(msg []byte) error {
 		if ns.Vfo.GetFrequency() != r.state.Vfo.Frequency {
 			r.state.Vfo.Frequency = ns.Vfo.GetFrequency()
 			fmt.Println("Frequency:", r.state.Vfo.Frequency)
-		}
-
-		if ns.Vfo.GetVfo() != r.state.Vfo.Vfo {
-			r.state.Vfo.Vfo = ns.Vfo.GetVfo()
 		}
 
 		if ns.Vfo.GetMode() != r.state.Vfo.Mode {
@@ -395,6 +402,17 @@ func (r *remoteRadio) updateParams(newParams map[string]float32) error {
 	return nil
 }
 
+func (r *remoteRadio) initSetState() sbRadio.SetState {
+	request := sbRadio.SetState{}
+
+	request.CurrentVfo = r.state.CurrentVfo
+	request.Vfo = &sbRadio.Vfo{}
+	request.Vfo.Split = &sbRadio.Split{}
+	request.Md = &sbRadio.MetaData{}
+
+	return request
+}
+
 func (r *remoteRadio) deepCopyState() sbRadio.SetState {
 
 	request := sbRadio.SetState{}
@@ -403,7 +421,6 @@ func (r *remoteRadio) deepCopyState() sbRadio.SetState {
 	request.RadioOn = r.state.RadioOn
 	request.Ptt = r.state.Ptt
 	request.Vfo = &sbRadio.Vfo{}
-	request.Vfo.Vfo = r.state.Vfo.Vfo
 	request.Vfo.Frequency = r.state.Vfo.Frequency
 	request.Vfo.Mode = r.state.Vfo.Mode
 	request.Vfo.PbWidth = r.state.Vfo.PbWidth
