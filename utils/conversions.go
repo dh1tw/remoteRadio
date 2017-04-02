@@ -7,3 +7,12 @@ func Btoi(b bool) int {
 	}
 	return 0
 }
+
+// Itob Int to Bool
+func Itob(i int) bool {
+	if i == 1 {
+		return true
+	}
+
+	return false
+}

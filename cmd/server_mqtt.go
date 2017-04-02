@@ -72,8 +72,10 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 	viper.BindPFlag("mqtt.radio", cmd.Flags().Lookup("radio"))
 	viper.BindPFlag("radio.polling_interval", cmd.Flags().Lookup("polling_interval"))
 
-	if viper.GetString("general.user_id") == "" {
-		viper.Set("general.user_id", utils.RandStringRunes(10))
+	if viper.IsSet("general.user_id") {
+		viper.Set("general.user_id", utils.RandStringRunes(5))
+	} else {
+		viper.Set("general.user_id", "unknown_"+utils.RandStringRunes(5))
 	}
 
 	// profiling server can be enabled through a hidden pflag
@@ -198,15 +200,16 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 
 	wg.Add(2) //MQTT + Ping + Radio
 
-	go events.WatchSystemEvents(evPS)
-	go comms.MqttClient(mqttSettings)
-	go ping.HandlePing(pingSettings)
-	time.Sleep(time.Millisecond * 1300)
-	go radio.HandleRadio(radioSettings)
-
 	connectionStatusCh := evPS.Sub(events.MqttConnStatus)
 	osExitCh := evPS.Sub(events.OsExit)
 	shutdownCh := evPS.Sub(events.Shutdown)
+
+	go events.WatchSystemEvents(evPS)
+	go comms.MqttClient(mqttSettings)
+	go ping.HandlePing(pingSettings)
+
+	time.Sleep(time.Millisecond * 1300)
+	go radio.HandleRadio(radioSettings)
 
 	status := serverStatus{}
 	status.topic = serverStatusTopic
@@ -231,6 +234,7 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 
 		case ev := <-connectionStatusCh:
 			connStatus := ev.(int)
+			fmt.Println("connstatus:", connStatus)
 			if connStatus == comms.CONNECTED {
 				status.online = true
 				if err := status.sendUpdate(toWireCh); err != nil {
@@ -256,6 +260,8 @@ func (status *serverStatus) sendUpdate(toWireCh chan comms.IOMsg) error {
 	if err != nil {
 		return err
 	}
+
+	fmt.Println("sending status:", status.online)
 
 	m := comms.IOMsg{}
 	m.Data = data

@@ -19,19 +19,31 @@ func (r *radio) deserializeCatRequest(request []byte) error {
 		return err
 	}
 
-	if ns.CurrentVfo != r.state.CurrentVfo {
-		if err := r.updateCurrentVfo(ns.CurrentVfo); err != nil {
-			log.Println(err)
+	if ns.Md.HasRadioOn {
+		if ns.GetRadioOn() != r.state.RadioOn {
+			if err := r.updatePowerOn(ns.GetRadioOn()); err != nil {
+				log.Println(err)
+			} else {
+				if r.state.RadioOn {
+					r.queryVfo()
+				}
+			}
 		}
 	}
 
-	if ns.VfoOperations != nil {
-		if err := r.execVfoOperations(ns.GetVfoOperations()); err != nil {
-			log.Println(err)
-		}
-	}
+	if r.state.RadioOn {
 
-	if ns.Vfo != nil {
+		if ns.CurrentVfo != r.state.CurrentVfo {
+			if err := r.updateCurrentVfo(ns.CurrentVfo); err != nil {
+				log.Println(err)
+			}
+		}
+
+		if len(ns.VfoOperations) > 0 {
+			if err := r.execVfoOperations(ns.GetVfoOperations()); err != nil {
+				log.Println(err)
+			}
+		}
 
 		if ns.Md.HasFrequency {
 			if ns.Vfo.GetFrequency() != r.state.Vfo.Frequency {
@@ -126,14 +138,6 @@ func (r *radio) deserializeCatRequest(request []byte) error {
 						log.Println(err)
 					}
 				}
-			}
-		}
-	}
-
-	if ns.Md.HasRadioOn {
-		if ns.GetRadioOn() != r.state.RadioOn {
-			if err := r.updatePowerOn(ns.GetRadioOn()); err != nil {
-				log.Println(err)
 			}
 		}
 	}

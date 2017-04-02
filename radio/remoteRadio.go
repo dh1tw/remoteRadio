@@ -13,6 +13,8 @@ import (
 	"github.com/dh1tw/remoteRadio/comms"
 	"github.com/dh1tw/remoteRadio/events"
 	sbRadio "github.com/dh1tw/remoteRadio/sb_radio"
+	"github.com/dh1tw/remoteRadio/utils"
+	"github.com/spf13/viper"
 )
 
 type RemoteRadioSettings struct {
@@ -32,6 +34,8 @@ type remoteRadio struct {
 	settings        RemoteRadioSettings
 	cliCmds         []cliCmd
 	printRigUpdates bool
+	userID          string
+	radioOnline     bool
 }
 
 type cliCmd struct {
@@ -61,9 +65,15 @@ func HandleRemoteRadio(rs RemoteRadioSettings) {
 	r.cliCmds = make([]cliCmd, 0, 30)
 	r.populateCliCmds()
 
-	// newStateInitalized := false
+	if viper.IsSet("general.user_id") {
+		r.userID = viper.GetString("general.user_id")
+	} else {
+		r.userID = "unknown_" + utils.RandStringRunes(5)
+	}
 
 	// rs.Events.Pub(true, events.ForwardCat)
+
+	fmt.Println("Rig command: ")
 
 	for {
 		select {
@@ -73,6 +83,8 @@ func HandleRemoteRadio(rs RemoteRadioSettings) {
 		case msg := <-rs.CatResponseCh:
 			r.deserializeCatResponse(msg)
 			// r.PrintState()
+		case msg := <-rs.RadioStatusCh:
+			r.deserializeRadioStatus(msg)
 		case msg := <-cliCh:
 			r.parseCli(msg.([]string))
 		case <-shutdownCh:
@@ -80,6 +92,21 @@ func HandleRemoteRadio(rs RemoteRadioSettings) {
 			return
 		}
 	}
+}
+
+func (r *remoteRadio) deserializeRadioStatus(data []byte) error {
+
+	rStatus := sbRadio.Status{}
+	if err := rStatus.Unmarshal(data); err != nil {
+		return err
+	}
+
+	if r.radioOnline != rStatus.GetOnline() {
+		r.radioOnline = rStatus.GetOnline()
+		fmt.Println("Update Radio Online:", r.radioOnline)
+	}
+
+	return nil
 }
 
 func (r *remoteRadio) sendCatRequest(req sbRadio.SetState) error {
@@ -120,7 +147,7 @@ Current Vfo: {{.CurrentVfo}}
     {{$name}}: {{$val}} {{end}}
   Parameters: {{range $name, $val := .Vfo.Parameters}}
     {{$name}}: {{$val}} {{end}}
-Radio Powered: {{.RadioOn}}
+Radio On: {{.RadioOn}}
 Ptt: {{.Ptt}}
 Update Rate: {{.PollingInterval}}
 
@@ -461,6 +488,7 @@ func (r *remoteRadio) initSetState() sbRadio.SetState {
 	request.Vfo = &sbRadio.Vfo{}
 	request.Vfo.Split = &sbRadio.Split{}
 	request.Md = &sbRadio.MetaData{}
+	request.UserId = r.userID
 
 	return request
 }

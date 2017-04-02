@@ -49,8 +49,6 @@ func HandleRadio(rs RadioSettings) {
 
 	r.state.PollingInterval = int32(r.settings.PollingInterval.Nanoseconds() / 1000000)
 
-	//	log.Println("Opening Port:", rs.Port)
-
 	err := r.rig.Init(rs.RigModel)
 	if err != nil {
 		log.Println(err)
@@ -61,22 +59,49 @@ func HandleRadio(rs RadioSettings) {
 
 	err = r.rig.SetPort(rs.Port)
 	if err != nil {
+		// if we can not set the port, we shut down
 		log.Println(err)
+		r.settings.Events.Pub(true, events.Shutdown)
 		return
 	}
 
-	if err := r.rig.Open(); err != nil {
-		log.Println(err)
+	if rs.RigModel != 1 { // exception for Dummy Rig
+		if err := r.rig.Open(); err != nil {
+			// if we can not open the port, we shut down
+			log.Println(err)
+			r.settings.Events.Pub(true, events.Shutdown)
+			return
+		}
 	}
 
+	// publish the radio's capabilities
 	if err := r.sendCaps(); err != nil {
 		log.Println(err)
 	}
 
-	if err := r.queryVfo(); err != nil {
+	// check if the radio is turned on and query its state
+	rigOn, err := r.rig.GetPowerStat()
+	if err != nil {
 		log.Println(err)
+		// we should check if the rig might no have the
+		// ability to be turn on/off through CapsTopic
+
+		// let's hope for the best and query it
+		if err := r.queryVfo(); err != nil {
+			log.Println(err)
+		}
+	} else {
+		// no error and the rig is on so we can query it
+		if rigOn == hl.RIG_POWER_ON {
+			if err := r.queryVfo(); err != nil {
+				log.Println(err)
+			}
+		} else {
+			r.state.RadioOn = false
+		}
 	}
 
+	// publish the radio's state
 	if err := r.sendState(); err != nil {
 		log.Println(err)
 	}
@@ -269,6 +294,11 @@ func (r *radio) sendCaps() error {
 }
 
 func (r *radio) updateMeter() error {
+
+	if !r.state.RadioOn {
+		return nil
+	}
+
 	vfo := hl.VfoValue[r.state.CurrentVfo]
 
 	newValueAvailable := false

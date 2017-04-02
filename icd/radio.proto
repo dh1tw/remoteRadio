@@ -20,6 +20,7 @@ message SetState{
     bool ptt = 6;
     MetaData md = 7;
     int32 polling_interval = 8;
+    string user_id = 9;
 }
 
 message Capabilities{

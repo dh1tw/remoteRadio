@@ -64,8 +64,10 @@ func mqttCliClient(cmd *cobra.Command, args []string) {
 	viper.BindPFlag("mqtt.station", cmd.Flags().Lookup("station"))
 	viper.BindPFlag("mqtt.radio", cmd.Flags().Lookup("radio"))
 
-	if viper.GetString("general.user_id") == "" {
-		viper.Set("general.user_id", utils.RandStringRunes(10))
+	if viper.IsSet("general.user_id") {
+		viper.Set("general.user_id", utils.RandStringRunes(5))
+	} else {
+		viper.Set("general.user_id", "unknown_"+utils.RandStringRunes(5))
 	}
 
 	mqttBrokerURL := viper.GetString("mqtt.broker_url")
@@ -128,15 +130,15 @@ func mqttCliClient(cmd *cobra.Command, args []string) {
 
 	wg.Add(2) //MQTT + RemoteRadio
 
+	connectionStatusCh := evPS.Sub(events.MqttConnStatus)
+	osExitCh := evPS.Sub(events.OsExit)
+	shutdownCh := evPS.Sub(events.Shutdown)
+
 	go events.WatchSystemEvents(evPS)
 	go radio.HandleRemoteRadio(remoteRadioSettings)
 	time.Sleep(200 * time.Millisecond)
 	go comms.MqttClient(mqttSettings)
 	go events.CaptureKeyboard(evPS)
-
-	connectionStatusCh := evPS.Sub(events.MqttConnStatus)
-	osExitCh := evPS.Sub(events.OsExit)
-	shutdownCh := evPS.Sub(events.Shutdown)
 
 	for {
 		select {

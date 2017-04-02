@@ -91,7 +91,7 @@ func MqttClient(s MqttSettings) {
 
 		} else if strings.Contains(msg.Topic(), "cat/status") {
 
-			//		s.ToDeserializePingRequestCh <- msg.Payload()[:len(msg.Payload())]
+			s.ToDeserializeStatusCh <- msg.Payload()[:len(msg.Payload())]
 
 		} else if strings.Contains(msg.Topic(), "cat/ping") {
 
