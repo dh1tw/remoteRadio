@@ -5,6 +5,8 @@ import (
 	"log"
 	"reflect"
 
+	"time"
+
 	hl "github.com/dh1tw/goHamlib"
 	sbRadio "github.com/dh1tw/remoteRadio/sb_radio"
 	"github.com/dh1tw/remoteRadio/utils"
@@ -140,6 +142,20 @@ func (r *radio) deserializeCatRequest(request []byte) error {
 		if ns.GetPtt() != r.state.Ptt {
 			if err := r.updatePtt(ns.GetPtt()); err != nil {
 				log.Println(err)
+			}
+		}
+	}
+
+	if ns.Md.HasPollingInterval {
+		if ns.GetPollingInterval() != r.state.PollingInterval {
+			if ns.GetPollingInterval() > 0 {
+				newPollingInterval := time.Millisecond * time.Duration(ns.GetPollingInterval())
+				r.pollingTicker.Stop()
+				r.pollingTicker = time.NewTicker(newPollingInterval)
+				r.state.PollingInterval = ns.GetPollingInterval()
+			} else {
+				r.pollingTicker.Stop()
+				r.state.PollingInterval = 0
 			}
 		}
 	}

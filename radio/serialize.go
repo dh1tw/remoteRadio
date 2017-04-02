@@ -31,7 +31,14 @@ func (r *radio) serializeCaps() (msg []byte, err error) {
 	caps.TuningSteps = hlMapToPbMap(r.rig.Caps.TuningSteps)
 	caps.Preamps = intListToint32List(r.rig.Caps.Preamps)
 	caps.Attenuators = intListToint32List(r.rig.Caps.Attenuators)
-
+	caps.RigModel = int32(r.rig.Caps.RigModel)
+	caps.ModelName = r.rig.Caps.ModelName
+	caps.Version = r.rig.Caps.Version
+	caps.MfgName = r.rig.Caps.MfgName
+	status, ok := hl.RigStatusName[r.rig.Caps.Status]
+	if ok {
+		caps.Status = status
+	}
 	msg, err = caps.Marshal()
 
 	return msg, err

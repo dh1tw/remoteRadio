@@ -8,7 +8,7 @@ message State{  // Rig State
     Channel channel = 3;
     bool radio_on = 4;
     bool ptt = 5;
-    int32 meter_update_rate = 6; // ms
+    int32 polling_interval = 6; // ms
 }
 
 message SetState{
@@ -19,6 +19,7 @@ message SetState{
     bool radio_on = 5;
     bool ptt = 6;
     MetaData md = 7;
+    int32 polling_interval = 8;
 }
 
 message Capabilities{
@@ -38,6 +39,11 @@ message Capabilities{
     map<string, Int32List> tuning_steps = 14;
     repeated int32 preamps = 15;
     repeated int32 attenuators = 16;
+    int32 rig_model = 17;
+    string model_name = 18;
+    string version = 19;
+    string mfg_name = 20;
+    string status = 21;
 }
 
 message Int32List{
@@ -76,6 +82,7 @@ message MetaData{
     bool has_parameters = 11;
     bool has_ptt = 12;
     bool has_radio_on = 13;
+    bool has_polling_interval = 14;
 }
 
 message Channel{

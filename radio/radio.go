@@ -47,6 +47,8 @@ func HandleRadio(rs RadioSettings) {
 	r.state.Channel = &sbRadio.Channel{}
 	r.settings = &rs
 
+	r.state.PollingInterval = int32(r.settings.PollingInterval.Nanoseconds() / 1000000)
+
 	//	log.Println("Opening Port:", rs.Port)
 
 	err := r.rig.Init(rs.RigModel)
