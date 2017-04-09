@@ -27,31 +27,32 @@ import (
 	"time"
 
 	"github.com/cskr/pubsub"
-	"github.com/dh1tw/remoteRadio/cliclient"
+	"github.com/dh1tw/remoteRadio/cligui"
 	"github.com/dh1tw/remoteRadio/comms"
 	"github.com/dh1tw/remoteRadio/events"
+	"github.com/dh1tw/remoteRadio/ping"
 	"github.com/dh1tw/remoteRadio/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 // mqttCmd represents the mqtt command
-var clientMqttCmd = &cobra.Command{
-	Use:   "mqtt",
-	Short: "MQTT CLI Client for a remote Radio",
-	Long:  `MQTT CLI Client for a remote Radio`,
-	Run:   mqttCliClient,
+var guiMqttCmd = &cobra.Command{
+	Use:   "gui",
+	Short: "MQTT CLI GUI Client for a remote Radio",
+	Long:  `MQTT CLI GUI Client for a remote Radio`,
+	Run:   guiCliClient,
 }
 
 func init() {
-	clientCmd.AddCommand(clientMqttCmd)
-	clientMqttCmd.Flags().StringP("broker-url", "u", "localhost", "Broker URL")
-	clientMqttCmd.Flags().IntP("broker-port", "p", 1883, "Broker Port")
-	clientMqttCmd.Flags().StringP("station", "X", "mystation", "Your station callsign")
-	clientMqttCmd.Flags().StringP("radio", "Y", "myradio", "Radio ID")
+	RootCmd.AddCommand(guiMqttCmd)
+	guiMqttCmd.Flags().StringP("broker-url", "u", "localhost", "Broker URL")
+	guiMqttCmd.Flags().IntP("broker-port", "p", 1883, "Broker Port")
+	guiMqttCmd.Flags().StringP("station", "X", "mystation", "Your station callsign")
+	guiMqttCmd.Flags().StringP("radio", "Y", "myradio", "Radio ID")
 }
 
-func mqttCliClient(cmd *cobra.Command, args []string) {
+func guiCliClient(cmd *cobra.Command, args []string) {
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
@@ -70,6 +71,8 @@ func mqttCliClient(cmd *cobra.Command, args []string) {
 		viper.Set("general.user_id", "unknown_"+utils.RandStringRunes(5))
 	}
 
+	userID := viper.GetString("general.user_id")
+
 	mqttBrokerURL := viper.GetString("mqtt.broker_url")
 	mqttBrokerPort := viper.GetInt("mqtt.broker_port")
 	mqttClientID := viper.GetString("general.user_id")
@@ -80,7 +83,7 @@ func mqttCliClient(cmd *cobra.Command, args []string) {
 
 	serverCatRequestTopic := baseTopic + "/setstate"
 	serverStatusTopic := baseTopic + "/status"
-	//	serverPingTopic := baseTopic + "/ping"
+	serverPingTopic := baseTopic + "/ping"
 	// errorTopic := baseTopic + "/error"
 
 	// tx topics
@@ -97,10 +100,19 @@ func mqttCliClient(cmd *cobra.Command, args []string) {
 	toDeserializeStatusCh := make(chan []byte, 5)
 
 	// Event PubSub
-	evPS := pubsub.New(1)
+	evPS := pubsub.New(10)
 
 	// WaitGroup to coordinate a graceful shutdown
 	var wg sync.WaitGroup
+
+	pingSettings := ping.Settings{
+		ToWireCh:  toWireCh,
+		PingTopic: serverPingTopic,
+		PongCh:    toDeserializePingResponseCh,
+		UserID:    userID,
+		WaitGroup: &wg,
+		Events:    evPS,
+	}
 
 	mqttSettings := comms.MqttSettings{
 		WaitGroup:  &wg,
@@ -113,12 +125,13 @@ func mqttCliClient(cmd *cobra.Command, args []string) {
 		ToDeserializeCatRequestCh:   toDeserializePingResponseCh,
 		ToDeserializeCapabilitiesCh: toDeserializeCapsCh,
 		ToDeserializeStatusCh:       toDeserializeStatusCh,
-		ToWire:                      toWireCh,
-		Events:                      evPS,
-		LastWill:                    nil,
+		ToDeserializePingResponseCh: toDeserializePingResponseCh,
+		ToWire:   toWireCh,
+		Events:   evPS,
+		LastWill: nil,
 	}
 
-	remoteRadioSettings := cliClient.RemoteRadioSettings{
+	remoteRadioSettings := cliGui.RemoteRadioSettings{
 		CatResponseCh:   toDeserializeCatResponseCh,
 		RadioStatusCh:   toDeserializeStatusCh,
 		CapabilitiesCh:  toDeserializeCapsCh,
@@ -128,36 +141,29 @@ func mqttCliClient(cmd *cobra.Command, args []string) {
 		WaitGroup:       &wg,
 	}
 
-	wg.Add(2) //MQTT + RemoteRadio
+	wg.Add(3) //MQTT + RemoteRadio
 
-	connectionStatusCh := evPS.Sub(events.MqttConnStatus)
-	osExitCh := evPS.Sub(events.OsExit)
 	shutdownCh := evPS.Sub(events.Shutdown)
 
 	go events.WatchSystemEvents(evPS)
-	go cliClient.HandleRemoteRadio(remoteRadioSettings)
+	go ping.CheckLatency(pingSettings)
+	go cliGui.HandleRemoteRadio(remoteRadioSettings)
 	time.Sleep(200 * time.Millisecond)
 	go comms.MqttClient(mqttSettings)
-	go events.CaptureKeyboard(evPS)
 
 	for {
 		select {
 
-		// CTRL-C has been pressed; let's prepare the shutdown
-		case <-osExitCh:
-			// advice that we are going offline
-			time.Sleep(time.Millisecond * 200)
-			evPS.Pub(true, events.Shutdown)
-
 		// shutdown the application gracefully
 		case <-shutdownCh:
+			//avoid waiting endlessly
+			exitTicker := time.NewTicker(time.Second)
+			go func() {
+				<-exitTicker.C
+				os.Exit(0)
+			}()
 			wg.Wait()
 			os.Exit(0)
-
-		case ev := <-connectionStatusCh:
-			connStatus := ev.(int)
-			if connStatus == comms.CONNECTED {
-			}
 		}
 	}
 }

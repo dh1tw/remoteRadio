@@ -16,7 +16,7 @@ func CaptureKeyboard(evPS *pubsub.PubSub) {
 		if scanner.Scan() {
 			switch scanner.Text() {
 			default:
-				evPS.Pub(strings.Fields(scanner.Text()), Cli)
+				evPS.Pub(strings.Fields(scanner.Text()), CliInput)
 			}
 		}
 	}

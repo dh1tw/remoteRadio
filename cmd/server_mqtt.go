@@ -31,13 +31,13 @@ import (
 	"github.com/cskr/pubsub"
 	"github.com/dh1tw/remoteAudio/events"
 	"github.com/dh1tw/remoteRadio/comms"
-	"github.com/dh1tw/remoteRadio/ping"
 	"github.com/dh1tw/remoteRadio/radio"
 	"github.com/dh1tw/remoteRadio/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	hl "github.com/dh1tw/goHamlib"
+	"github.com/dh1tw/remoteRadio/pong"
 	sbRadio "github.com/dh1tw/remoteRadio/sb_radio"
 )
 
@@ -147,7 +147,7 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 		LastWill: &lastWill,
 	}
 
-	pingSettings := ping.PingSettings{
+	pongSettings := pong.Settings{
 		PingRxCh:  toDeserializePingRequestCh,
 		ToWireCh:  toWireCh,
 		PongTopic: serverPongTopic,
@@ -198,7 +198,7 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 		PollingInterval:  pollingInterval,
 	}
 
-	wg.Add(2) //MQTT + Ping + Radio
+	wg.Add(3) //MQTT + Ping + Radio
 
 	connectionStatusCh := evPS.Sub(events.MqttConnStatus)
 	osExitCh := evPS.Sub(events.OsExit)
@@ -206,7 +206,7 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 
 	go events.WatchSystemEvents(evPS)
 	go comms.MqttClient(mqttSettings)
-	go ping.HandlePing(pingSettings)
+	go pong.HandlePong(pongSettings)
 
 	time.Sleep(time.Millisecond * 1300)
 	go radio.HandleRadio(radioSettings)

@@ -1,16 +1,12 @@
-package radio
+package cliGui
 
 import (
-	"fmt"
-	"html/template"
 	"math"
-	"os"
 	"strconv"
 	"strings"
 
 	sbRadio "github.com/dh1tw/remoteRadio/sb_radio"
 	"github.com/dh1tw/remoteRadio/utils"
-	"github.com/olekukonko/tablewriter"
 )
 
 func (r *remoteRadio) populateCliCmds() {
@@ -26,15 +22,6 @@ func (r *remoteRadio) populateCliCmds() {
 
 	r.cliCmds = append(r.cliCmds, cliSetFrequency)
 
-	cliGetFrequency := cliCmd{
-		Cmd:         getFrequency,
-		Name:        "get_freq",
-		Shortcut:    "f",
-		Description: "Frequency [kHz] of current VFO",
-	}
-
-	r.cliCmds = append(r.cliCmds, cliGetFrequency)
-
 	cliSetMode := cliCmd{
 		Cmd:         setMode,
 		Name:        "set_mode",
@@ -45,15 +32,6 @@ func (r *remoteRadio) populateCliCmds() {
 	}
 
 	r.cliCmds = append(r.cliCmds, cliSetMode)
-
-	cliGetMode := cliCmd{
-		Cmd:         getMode,
-		Name:        "get_mode",
-		Shortcut:    "m",
-		Description: "Get Mode",
-	}
-
-	r.cliCmds = append(r.cliCmds, cliGetMode)
 
 	cliSetVfo := cliCmd{
 		Cmd:         setVfo,
@@ -66,15 +44,6 @@ func (r *remoteRadio) populateCliCmds() {
 
 	r.cliCmds = append(r.cliCmds, cliSetVfo)
 
-	cliGetVfo := cliCmd{
-		Cmd:         getVfo,
-		Name:        "get_vfo",
-		Shortcut:    "v",
-		Description: "Get Vfo",
-	}
-
-	r.cliCmds = append(r.cliCmds, cliGetVfo)
-
 	cliSetRit := cliCmd{
 		Cmd:         setRit,
 		Name:        "set_rit",
@@ -85,15 +54,6 @@ func (r *remoteRadio) populateCliCmds() {
 	}
 
 	r.cliCmds = append(r.cliCmds, cliSetRit)
-
-	cliGetRit := cliCmd{
-		Cmd:         getRit,
-		Name:        "get_rit",
-		Shortcut:    "j",
-		Description: "Get Rit [Hz]",
-	}
-
-	r.cliCmds = append(r.cliCmds, cliGetRit)
 
 	cliSetXit := cliCmd{
 		Cmd:         setXit,
@@ -106,15 +66,6 @@ func (r *remoteRadio) populateCliCmds() {
 
 	r.cliCmds = append(r.cliCmds, cliSetXit)
 
-	cliGetXit := cliCmd{
-		Cmd:         getXit,
-		Name:        "get_xit",
-		Shortcut:    "z",
-		Description: "Get Xit [Hz]",
-	}
-
-	r.cliCmds = append(r.cliCmds, cliGetXit)
-
 	cliSetAnt := cliCmd{
 		Cmd:         setAnt,
 		Name:        "set_ant",
@@ -126,15 +77,6 @@ func (r *remoteRadio) populateCliCmds() {
 
 	r.cliCmds = append(r.cliCmds, cliSetAnt)
 
-	cliGetAnt := cliCmd{
-		Cmd:         getAnt,
-		Name:        "get_ant",
-		Shortcut:    "y",
-		Description: "Get Antenna",
-	}
-
-	r.cliCmds = append(r.cliCmds, cliGetAnt)
-
 	cliSetPtt := cliCmd{
 		Cmd:         setPtt,
 		Name:        "set_ptt",
@@ -145,15 +87,6 @@ func (r *remoteRadio) populateCliCmds() {
 	}
 
 	r.cliCmds = append(r.cliCmds, cliSetPtt)
-
-	cliGetPtt := cliCmd{
-		Cmd:         getPtt,
-		Name:        "get_ptt",
-		Shortcut:    "y",
-		Description: "Get Ptt",
-	}
-
-	r.cliCmds = append(r.cliCmds, cliGetPtt)
 
 	cliExecVfoOp := cliCmd{
 		Cmd:         execVfoOp,
@@ -177,15 +110,6 @@ func (r *remoteRadio) populateCliCmds() {
 
 	r.cliCmds = append(r.cliCmds, cliSetFunction)
 
-	cliGetFunction := cliCmd{
-		Cmd:         getFunction,
-		Name:        "get_func",
-		Shortcut:    "u",
-		Description: "List the activated functions",
-	}
-
-	r.cliCmds = append(r.cliCmds, cliGetFunction)
-
 	cliSetLevel := cliCmd{
 		Cmd:         setLevel,
 		Name:        "set_level",
@@ -196,15 +120,6 @@ func (r *remoteRadio) populateCliCmds() {
 	}
 
 	r.cliCmds = append(r.cliCmds, cliSetLevel)
-
-	cliGetLevel := cliCmd{
-		Cmd:         getLevel,
-		Name:        "get_level",
-		Shortcut:    "l",
-		Description: "Lists all available levels",
-	}
-
-	r.cliCmds = append(r.cliCmds, cliGetLevel)
 
 	cliSetTuningStep := cliCmd{
 		Cmd:         setTuningStep,
@@ -217,15 +132,6 @@ func (r *remoteRadio) populateCliCmds() {
 
 	r.cliCmds = append(r.cliCmds, cliSetTuningStep)
 
-	cliGetTuningStep := cliCmd{
-		Cmd:         getTuningStep,
-		Name:        "get_ts",
-		Shortcut:    "n",
-		Description: "Get the current tuning step [Hz]",
-	}
-
-	r.cliCmds = append(r.cliCmds, cliGetTuningStep)
-
 	cliSetPowerStat := cliCmd{
 		Cmd:         setPowerStat,
 		Name:        "set_powerstat",
@@ -237,15 +143,6 @@ func (r *remoteRadio) populateCliCmds() {
 
 	r.cliCmds = append(r.cliCmds, cliSetPowerStat)
 
-	cliGetPowerStat := cliCmd{
-		Cmd:         getPowerStat,
-		Name:        "get_powerstat",
-		Shortcut:    "",
-		Description: "Get the power status of the radio (On/Off)",
-	}
-
-	r.cliCmds = append(r.cliCmds, cliGetPowerStat)
-
 	cliSetSplit := cliCmd{
 		Cmd:         setSplit,
 		Name:        "set_split",
@@ -256,15 +153,6 @@ func (r *remoteRadio) populateCliCmds() {
 	}
 
 	r.cliCmds = append(r.cliCmds, cliSetSplit)
-
-	cliGetSplit := cliCmd{
-		Cmd:         getSplit,
-		Name:        "get_split",
-		Shortcut:    "s",
-		Description: "Get the split status (if enabled: VFO, Frequency, Mode, Filter)",
-	}
-
-	r.cliCmds = append(r.cliCmds, cliGetSplit)
 
 	cliSetSplitFrequency := cliCmd{
 		Cmd:         setSplitFreq,
@@ -310,15 +198,6 @@ func (r *remoteRadio) populateCliCmds() {
 
 	r.cliCmds = append(r.cliCmds, cliSetPollingInterval)
 
-	cliGetPollingInterval := cliCmd{
-		Cmd:         getPollingInterval,
-		Name:        "get_polling_interval",
-		Shortcut:    "",
-		Description: "Get the current polling Rate [ms] for updating the meters (SWR, ALC, Field Strength...)",
-	}
-
-	r.cliCmds = append(r.cliCmds, cliGetPollingInterval)
-
 	cliSetPrintUpdates := cliCmd{
 		Cmd:         setPrintRigUpdates,
 		Name:        "set_print_rig_updates",
@@ -329,78 +208,30 @@ func (r *remoteRadio) populateCliCmds() {
 
 	r.cliCmds = append(r.cliCmds, cliSetPrintUpdates)
 
-	cliDumpCaps := cliCmd{
-		Cmd:         dumpCaps,
-		Name:        "dump_caps",
-		Shortcut:    "3",
-		Description: "Print the capabilities of the radio",
-	}
-
-	r.cliCmds = append(r.cliCmds, cliDumpCaps)
-
-	cliDumpState := cliCmd{
-		Cmd:         dumpState,
-		Name:        "dump_state",
-		Shortcut:    "5",
-		Description: "Print the complete state of the radio",
-	}
-
-	r.cliCmds = append(r.cliCmds, cliDumpState)
-
-	cliHelp := cliCmd{
-		Cmd:         printHelp,
-		Name:        "help",
-		Shortcut:    "",
-		Description: "Print this help",
-	}
-
-	r.cliCmds = append(r.cliCmds, cliHelp)
-
-	cliBasicHelp := cliCmd{
-		Cmd:         printBasicHelp,
-		Name:        "basic_help",
-		Shortcut:    "?",
-		Description: "Print the list of commands",
-	}
-
-	r.cliCmds = append(r.cliCmds, cliBasicHelp)
-
 }
 
 func (r *remoteRadio) parseCli(cliCmd []string) {
 
-	found := false
-
-	if len(cliCmd) == 0 {
-		fmt.Printf("Rig command: ")
-		return
-	}
-
 	for _, cmd := range r.cliCmds {
 		if cmd.Name == cliCmd[0] || cmd.Shortcut == cliCmd[0] {
 			cmd.Cmd(r, cliCmd[1:])
-			found = true
 		}
 	}
-	if found {
-		fmt.Println()
-	}
-	fmt.Printf("Rig command: ")
 }
 
 func getFrequency(r *remoteRadio, args []string) {
-	fmt.Printf("Frequency: %.3fkHz\n", r.state.Vfo.Frequency/1000)
+	r.logger.Printf("Frequency: %.3fkHz\n", r.state.Vfo.Frequency/1000)
 }
 
 func setFrequency(r *remoteRadio, args []string) {
 
-	if ok := checkArgs(args, 1); !ok {
+	if ok := r.checkArgs(args, 1); !ok {
 		return
 	}
 
 	freq, err := strconv.ParseFloat(args[0], 10)
 	if err != nil {
-		fmt.Println("ERROR: Frequency [kHz] must be float")
+		r.logger.Println("ERROR: frequency [kHz] must be float")
 		return
 	}
 
@@ -409,26 +240,26 @@ func setFrequency(r *remoteRadio, args []string) {
 	req.Vfo.Frequency = freq * 1000
 	req.Md.HasFrequency = true
 	if err := r.sendCatRequest(req); err != nil {
-		fmt.Println("ERROR:", err)
+		r.logger.Println("ERROR:", err)
 	}
 }
 
 func getMode(r *remoteRadio, args []string) {
-	fmt.Println("Mode:", r.state.Vfo.Mode)
-	fmt.Printf("Filter: %dHz\n", r.state.Vfo.PbWidth)
+	r.logger.Println("Mode:", r.state.Vfo.Mode)
+	r.logger.Printf("Filter: %dHz\n", r.state.Vfo.PbWidth)
 }
 
 func setMode(r *remoteRadio, args []string) {
 
 	if len(args) < 1 || len(args) > 2 {
-		fmt.Println("ERROR: Wrong number of arguments")
+		r.logger.Println("ERROR: wrong number of arguments")
 		return
 	}
 
 	mode := strings.ToUpper(args[0])
 
 	if ok := utils.StringInSlice(mode, r.caps.Modes); !ok {
-		fmt.Println("ERROR: Unsupported Mode")
+		r.logger.Println("ERROR: unsupported mode")
 		return
 	}
 
@@ -440,38 +271,38 @@ func setMode(r *remoteRadio, args []string) {
 
 		pbWidth, err := strconv.ParseInt(args[1], 10, 32)
 		if err != nil {
-			fmt.Println("ERROR: Filter width [Hz] must be integer")
+			r.logger.Println("ERROR: filter width [Hz] must be integer")
 		}
 
 		filters, ok := r.caps.Filters[mode]
 		if !ok {
-			fmt.Println("WARN: No Filters found for this Mode in Rig Caps")
+			r.logger.Println("WARN: no filters found for this mode in rig caps")
 		}
 		if ok := utils.Int32InSlice(int32(pbWidth), filters.Value); !ok {
-			fmt.Println("WARN: unspported passband width")
+			r.logger.Println("WARN: unspported passband width")
 		}
 		req.Vfo.PbWidth = int32(pbWidth)
 		req.Md.HasPbWidth = true
 	}
 
 	if err := r.sendCatRequest(req); err != nil {
-		fmt.Println("ERROR:", err)
+		r.logger.Println("ERROR:", err)
 	}
 }
 
 func getVfo(r *remoteRadio, args []string) {
-	fmt.Println("Current Vfo:", r.state.CurrentVfo)
+	r.logger.Println("Current Vfo:", r.state.CurrentVfo)
 }
 
 func setVfo(r *remoteRadio, args []string) {
-	if ok := checkArgs(args, 1); !ok {
+	if ok := r.checkArgs(args, 1); !ok {
 		return
 	}
 
 	vfo := strings.ToUpper(args[0])
 
 	if ok := utils.StringInSlice(vfo, r.caps.Vfos); !ok {
-		fmt.Println("ERROR: Unsupported VFO")
+		r.logger.Println("ERROR: unsupported vfo")
 		return
 	}
 
@@ -479,28 +310,28 @@ func setVfo(r *remoteRadio, args []string) {
 	req.CurrentVfo = vfo
 
 	if err := r.sendCatRequest(req); err != nil {
-		fmt.Println(err)
+		r.logger.Println(err)
 	}
 }
 
 func getRit(r *remoteRadio, args []string) {
-	fmt.Printf("Rit: %dHz\n", r.state.Vfo.Rit)
+	r.logger.Printf("Rit: %dHz\n", r.state.Vfo.Rit)
 }
 
 func setRit(r *remoteRadio, args []string) {
 
-	if ok := checkArgs(args, 1); !ok {
+	if ok := r.checkArgs(args, 1); !ok {
 		return
 	}
 
 	rit, err := strconv.ParseInt(args[0], 10, 32)
 	if err != nil {
-		fmt.Println("ERROR: Rit value [Hz] must be integer")
+		r.logger.Println("ERROR: rit value [Hz] must be integer")
 		return
 	}
 
 	if math.Abs(float64(rit)) > float64(r.caps.MaxRit) {
-		fmt.Println("WARN: Rit value larger than supported by Rig")
+		r.logger.Println("WARN: rit value larger than supported by rig")
 	}
 
 	req := r.initSetState()
@@ -508,28 +339,28 @@ func setRit(r *remoteRadio, args []string) {
 	req.Md.HasRit = true
 
 	if err := r.sendCatRequest(req); err != nil {
-		fmt.Println("ERROR:", err)
+		r.logger.Println("ERROR:", err)
 	}
 }
 
 func getXit(r *remoteRadio, args []string) {
-	fmt.Printf("Xit: %dHz\n", r.state.Vfo.Xit)
+	r.logger.Printf("Xit: %dHz\n", r.state.Vfo.Xit)
 }
 
 func setXit(r *remoteRadio, args []string) {
 
-	if !checkArgs(args, 1) {
+	if !r.checkArgs(args, 1) {
 		return
 	}
 
 	xit, err := strconv.ParseInt(args[0], 10, 32)
 	if err != nil {
-		fmt.Println("ERROR: Xit value [Hz] must be integer")
+		r.logger.Println("ERROR: xit value [Hz] must be integer")
 		return
 	}
 
 	if math.Abs(float64(xit)) > float64(r.caps.MaxXit) {
-		fmt.Println("WARN: Xit value larger than supported by Rig")
+		r.logger.Println("WARN: xit value larger than supported by rig")
 	}
 
 	req := r.initSetState()
@@ -538,22 +369,22 @@ func setXit(r *remoteRadio, args []string) {
 	req.Md.HasXit = true
 
 	if err := r.sendCatRequest(req); err != nil {
-		fmt.Println("ERROR:", err)
+		r.logger.Println("ERROR:", err)
 	}
 }
 
 func getAnt(r *remoteRadio, args []string) {
-	fmt.Println("Antenna:", r.state.Vfo.Ant)
+	r.logger.Println("Antenna:", r.state.Vfo.Ant)
 }
 
 func setAnt(r *remoteRadio, args []string) {
-	if !checkArgs(args, 1) {
+	if !r.checkArgs(args, 1) {
 		return
 	}
 
 	ant, err := strconv.ParseInt(args[0], 10, 32)
 	if err != nil {
-		fmt.Println("ERROR: Antenna value must be integer")
+		r.logger.Println("ERROR: antenna value must be integer")
 		return
 	}
 
@@ -563,22 +394,22 @@ func setAnt(r *remoteRadio, args []string) {
 	req.Md.HasAnt = true
 
 	if err := r.sendCatRequest(req); err != nil {
-		fmt.Println("ERROR:", err)
+		r.logger.Println("ERROR:", err)
 	}
 }
 
 func getPowerStat(r *remoteRadio, args []string) {
-	fmt.Println("Power On:", r.state.RadioOn)
+	r.logger.Println("Power On:", r.state.RadioOn)
 }
 
 func setPowerStat(r *remoteRadio, args []string) {
-	if !checkArgs(args, 1) {
+	if !r.checkArgs(args, 1) {
 		return
 	}
 
 	power, err := strconv.ParseBool(args[0])
 	if err != nil {
-		fmt.Println("ERROR: Power value must be of type bool (1,t,T,True / 0,f,F,FALSE")
+		r.logger.Println("ERROR: power value must be of type bool (1,t,true / 0,f,false")
 		return
 	}
 
@@ -587,22 +418,22 @@ func setPowerStat(r *remoteRadio, args []string) {
 	req.Md.HasRadioOn = true
 
 	if err := r.sendCatRequest(req); err != nil {
-		fmt.Println("ERROR:", err)
+		r.logger.Println("ERROR:", err)
 	}
 }
 
 func getPtt(r *remoteRadio, args []string) {
-	fmt.Println("PTT On:", r.state.Ptt)
+	r.logger.Println("PTT On:", r.state.Ptt)
 }
 
 func setPtt(r *remoteRadio, args []string) {
-	if !checkArgs(args, 1) {
+	if !r.checkArgs(args, 1) {
 		return
 	}
 
 	ptt, err := strconv.ParseBool(args[0])
 	if err != nil {
-		fmt.Println("ERROR: PTT value must be of type bool (1,t,T,True / 0,f,F,FALSE")
+		r.logger.Println("ERROR: ptt value must be of type bool (1,t,true / 0,f,false")
 		return
 	}
 
@@ -611,32 +442,24 @@ func setPtt(r *remoteRadio, args []string) {
 	req.Md.HasPtt = true
 
 	if err := r.sendCatRequest(req); err != nil {
-		fmt.Println("ERROR:", err)
+		r.logger.Println("ERROR:", err)
 	}
 }
 
-func getLevel(r *remoteRadio, args []string) {
-	r.PrintLevels()
-}
-
 func setLevel(r *remoteRadio, args []string) {
-	if !checkArgs(args, 2) {
-		fmt.Printf("Available Levels: ")
-		for _, level := range r.caps.GetSetLevels() {
-			fmt.Printf("%s ", level.Name)
-		}
+	if !r.checkArgs(args, 2) {
 		return
 	}
 
 	levelName := strings.ToUpper(args[0])
 
 	if !valueInValueList(levelName, r.caps.SetLevels) {
-		fmt.Println("ERROR: Unknown Level")
+		r.logger.Println("ERROR: unknown level")
 	}
 
 	levelValue, err := strconv.ParseFloat(args[1], 32)
 	if err != nil {
-		fmt.Println("ERROR: Level Value must be of type Float")
+		r.logger.Println("ERROR: level value must be of type float")
 		return
 	}
 
@@ -649,23 +472,23 @@ func setLevel(r *remoteRadio, args []string) {
 	req.Vfo.Levels = levelMap
 	req.Md.HasLevels = true
 	if err := r.sendCatRequest(req); err != nil {
-		fmt.Println("ERROR:", err)
+		r.logger.Println("ERROR:", err)
 	}
 }
 
 func getFunction(r *remoteRadio, args []string) {
-	fmt.Println("Functions:", r.state.Vfo.Functions)
+	r.logger.Println("Functions:", r.state.Vfo.Functions)
 }
 
 func setFunction(r *remoteRadio, args []string) {
-	if !checkArgs(args, 1) {
-		fmt.Println("Available Functions:", r.caps.SetFunctions)
+	if !r.checkArgs(args, 1) {
 		return
 	}
 
 	funcName := args[0]
 
 	req := r.initSetState()
+	req.Vfo.Functions = r.state.Vfo.Functions
 	req.Md.HasFunctions = true
 
 	if !utils.StringInSlice(funcName, req.Vfo.Functions) {
@@ -675,29 +498,29 @@ func setFunction(r *remoteRadio, args []string) {
 	}
 
 	if err := r.sendCatRequest(req); err != nil {
-		fmt.Println("ERROR:", err)
+		r.logger.Println("ERROR:", err)
 	}
 
 }
 
 func getSplit(r *remoteRadio, args []string) {
-	fmt.Println("Split Enabled:", r.state.Vfo.Split.Enabled)
+	r.logger.Println("Split Enabled:", r.state.Vfo.Split.Enabled)
 	if r.state.Vfo.Split.Enabled {
-		fmt.Println("Split Vfo:", r.state.Vfo.Split.Vfo)
-		fmt.Printf("Split Freq: %.3fkHz\n", r.state.Vfo.Split.Frequency)
-		fmt.Println("Split Mode:", r.state.Vfo.Split.Mode)
-		fmt.Printf("Split PbWidth: %dHz\n", r.state.Vfo.Split.PbWidth)
+		r.logger.Println("Split Vfo:", r.state.Vfo.Split.Vfo)
+		r.logger.Printf("Split Freq: %.3fkHz\n", r.state.Vfo.Split.Frequency)
+		r.logger.Println("Split Mode:", r.state.Vfo.Split.Mode)
+		r.logger.Printf("Split PbWidth: %dHz\n", r.state.Vfo.Split.PbWidth)
 	}
 }
 
 func setSplit(r *remoteRadio, args []string) {
-	if !checkArgs(args, 1) {
+	if !r.checkArgs(args, 1) {
 		return
 	}
 
 	splitEnabled, err := strconv.ParseBool(args[0])
 	if err != nil {
-		fmt.Println("ERROR: Split Enable/Disable value must be of type bool (1,t,T,True / 0,f,F,FALSE")
+		r.logger.Println("ERROR: split enable/disable value must be of type bool (1,t,true / 0,f,false")
 		return
 	}
 
@@ -706,18 +529,18 @@ func setSplit(r *remoteRadio, args []string) {
 
 	req.Vfo.Split.Enabled = splitEnabled
 	if err := r.sendCatRequest(req); err != nil {
-		fmt.Println("ERROR:", err)
+		r.logger.Println("ERROR:", err)
 	}
 }
 
 func setSplitFreq(r *remoteRadio, args []string) {
-	if !checkArgs(args, 1) {
+	if !r.checkArgs(args, 1) {
 		return
 	}
 
 	freq, err := strconv.ParseFloat(args[0], 10)
 	if err != nil {
-		fmt.Println("ERROR: Frequency [kHz] must be float")
+		r.logger.Println("ERROR: frequency [kHz] must be float")
 		return
 	}
 
@@ -727,18 +550,18 @@ func setSplitFreq(r *remoteRadio, args []string) {
 	req.Md.HasSplit = true
 
 	if err := r.sendCatRequest(req); err != nil {
-		fmt.Println(err)
+		r.logger.Println(err)
 	}
 }
 
 func setSplitMode(r *remoteRadio, args []string) {
 	if len(args) < 1 || len(args) > 2 {
-		fmt.Println("ERROR: Wrong number of arguments")
+		r.logger.Println("ERROR: wrong number of arguments")
 		return
 	}
 
 	if ok := utils.StringInSlice(args[0], r.caps.Modes); !ok {
-		fmt.Println("ERROR: Unsupported Mode")
+		r.logger.Println("ERROR: unsupported mode")
 		return
 	}
 
@@ -750,15 +573,15 @@ func setSplitMode(r *remoteRadio, args []string) {
 
 		pbWidth, err := strconv.ParseInt(args[1], 10, 32)
 		if err != nil {
-			fmt.Println("ERROR: Filter width [Hz] must be integer")
+			r.logger.Println("ERROR: filter width [Hz] must be integer")
 		}
 
 		filters, ok := r.caps.Filters[args[0]]
 		if !ok {
-			fmt.Println("WARN: No Filters found for this Mode in Rig Caps")
+			r.logger.Println("WARN: no filters found for this mode in rig caps")
 		}
 		if ok := utils.Int32InSlice(int32(pbWidth), filters.Value); !ok {
-			fmt.Println("WARN: unspported filter width")
+			r.logger.Println("WARN: unspported filter width")
 		}
 		req.Vfo.Split.PbWidth = int32(pbWidth)
 	}
@@ -766,24 +589,24 @@ func setSplitMode(r *remoteRadio, args []string) {
 	req.Vfo.Split.Enabled = true
 
 	if err := r.sendCatRequest(req); err != nil {
-		fmt.Println("ERROR:", err)
+		r.logger.Println("ERROR:", err)
 	}
 }
 
 func setSplitFreqMode(r *remoteRadio, args []string) {
 	if len(args) < 2 || len(args) > 3 {
-		fmt.Println("ERROR: Wrong number of arguments")
+		r.logger.Println("ERROR: wrong number of arguments")
 		return
 	}
 
 	freq, err := strconv.ParseFloat(args[0], 10)
 	if err != nil {
-		fmt.Println("ERROR: Frequency [Hz] must be float")
+		r.logger.Println("ERROR: frequency [Hz] must be float")
 		return
 	}
 
 	if ok := utils.StringInSlice(args[1], r.caps.Modes); !ok {
-		fmt.Println("ERROR: Unsupported Mode")
+		r.logger.Println("ERROR: unsupported mode")
 		return
 	}
 
@@ -797,21 +620,21 @@ func setSplitFreqMode(r *remoteRadio, args []string) {
 
 		pbWidth, err := strconv.ParseInt(args[2], 10, 32)
 		if err != nil {
-			fmt.Println("ERROR: Filter width [Hz] must be integer")
+			r.logger.Println("ERROR: filter width [Hz] must be integer")
 		}
 
 		filters, ok := r.caps.Filters[args[2]]
 		if !ok {
-			fmt.Println("WARN: No Filters found for this Mode in Rig Caps")
+			r.logger.Println("WARN: no filters found for this mode in rig caps")
 		}
 		if ok := utils.Int32InSlice(int32(pbWidth), filters.Value); !ok {
-			fmt.Println("WARN: unspported filter width")
+			r.logger.Println("WARN: unspported filter width")
 		}
 		req.Vfo.Split.PbWidth = int32(pbWidth)
 	}
 
 	if err := r.sendCatRequest(req); err != nil {
-		fmt.Println("ERROR:", err)
+		r.logger.Println("ERROR:", err)
 	}
 }
 
@@ -819,7 +642,7 @@ func execVfoOp(r *remoteRadio, args []string) {
 
 	for _, vfoOp := range args {
 		if !utils.StringInSlice(vfoOp, r.caps.VfoOps) {
-			fmt.Println("ERROR: Unknown VFO Operation:", vfoOp)
+			r.logger.Println("ERROR: unknown vfo operation:", vfoOp)
 			return
 		}
 	}
@@ -828,17 +651,17 @@ func execVfoOp(r *remoteRadio, args []string) {
 	req.VfoOperations = args
 
 	if err := r.sendCatRequest(req); err != nil {
-		fmt.Println("ERROR:", err)
+		r.logger.Println("ERROR:", err)
 	}
 
 }
 
 func getTuningStep(r *remoteRadio, args []string) {
-	fmt.Printf("Tuning Step: %dHz\n", r.state.Vfo.TuningStep)
+	r.logger.Printf("Tuning Step: %dHz\n", r.state.Vfo.TuningStep)
 }
 
 func setTuningStep(r *remoteRadio, args []string) {
-	if !checkArgs(args, 1) {
+	if !r.checkArgs(args, 1) {
 		return
 	}
 
@@ -846,32 +669,32 @@ func setTuningStep(r *remoteRadio, args []string) {
 
 	ts, err := strconv.ParseInt(args[0], 10, 32)
 	if err != nil {
-		fmt.Println("ERROR: Tuning step [Hz] must be integer")
+		r.logger.Println("ERROR: tuning step [Hz] must be integer")
 		return
 	}
 
 	// check if the given tuning step is supported by the rig
 	supportedTs, ok := r.caps.TuningSteps[r.state.Vfo.Mode]
 	if !ok {
-		fmt.Println("WARN: No Tuning step values registered for this mode")
+		r.logger.Println("WARN: No tuning step values registered for this mode")
 	}
 	if ok := utils.Int32InSlice(int32(ts), supportedTs.Value); !ok {
-		fmt.Println("WARN: Tuning step not supported for this Mode")
+		r.logger.Println("WARN: tuning step not supported for this mode")
 	}
 	req.Vfo.TuningStep = int32(ts)
 	req.Md.HasTuningStep = true
 
 	if err := r.sendCatRequest(req); err != nil {
-		fmt.Println("ERROR:", err)
+		r.logger.Println("ERROR:", err)
 	}
 }
 
 func getPollingInterval(r *remoteRadio, args []string) {
-	fmt.Printf("Rig polling interval: %dms\n", r.state.PollingInterval)
+	r.logger.Printf("Rig polling interval: %dms\n", r.state.PollingInterval)
 }
 
 func setPollingInterval(r *remoteRadio, args []string) {
-	if !checkArgs(args, 1) {
+	if !r.checkArgs(args, 1) {
 		return
 	}
 
@@ -879,7 +702,7 @@ func setPollingInterval(r *remoteRadio, args []string) {
 
 	ur, err := strconv.ParseInt(args[0], 10, 32)
 	if err != nil {
-		fmt.Println("ERROR: Polling interval must be integer [ms]")
+		r.logger.Println("ERROR: polling interval must be integer [ms]")
 		return
 	}
 
@@ -887,59 +710,27 @@ func setPollingInterval(r *remoteRadio, args []string) {
 	req.Md.HasPollingInterval = true
 
 	if err := r.sendCatRequest(req); err != nil {
-		fmt.Println("ERROR:", err)
+		r.logger.Println("ERROR:", err)
 	}
 }
 
 func setPrintRigUpdates(r *remoteRadio, args []string) {
-	if !checkArgs(args, 1) {
+	if !r.checkArgs(args, 1) {
 		return
 	}
 
 	ru, err := strconv.ParseBool(args[0])
 	if err != nil {
-		fmt.Println("ERROR: Value must be of type bool (1,t,T,True / 0,f,F,FALSE")
+		r.logger.Println("ERROR: value must be of type bool (1,t,true / 0,f,false")
 		return
 	}
 
 	r.printRigUpdates = ru
 }
 
-func dumpCaps(r *remoteRadio, args []string) {
-	r.PrintCapabilities()
-}
-
-func dumpState(r *remoteRadio, args []string) {
-	r.PrintState()
-}
-
-func printHelp(r *remoteRadio, args []string) {
-	err := helpTmpl.Execute(os.Stdout, r.cliCmds)
-	if err != nil {
-		fmt.Println(err)
-	}
-}
-
-func printBasicHelp(r *remoteRadio, args []string) {
-
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Command", "Shortcut", "Parameter"})
-	table.SetCenterSeparator("|")
-	table.SetRowLine(true)
-	table.SetAlignment(tablewriter.ALIGN_LEFT)
-	table.SetColWidth(50)
-
-	for _, el := range r.cliCmds {
-		table.Append([]string{el.Name, el.Shortcut, el.Parameters})
-	}
-
-	fmt.Println()
-	table.Render()
-}
-
-func checkArgs(args []string, length int) bool {
+func (r *remoteRadio) checkArgs(args []string, length int) bool {
 	if len(args) != length {
-		fmt.Println("ERROR: Wrong number of arguments")
+		r.logger.Println("ERROR: wrong number of arguments")
 		return false
 	}
 	return true
@@ -953,17 +744,3 @@ func valueInValueList(vName string, vList []*sbRadio.Value) bool {
 	}
 	return false
 }
-
-var helpTmpl = template.Must(template.New("").Parse(
-	`
-Available commands (some may not be available for this radio):
-
-{{range .}}{{.Name}}:
-  Shortcut: {{if .Shortcut}}{{.Shortcut}}{{else}}n/a{{end}}
-  Description: {{if .Description}}{{.Description}}{{else}}n/a{{end}}
-  Example: {{if .Example}}{{.Example}}{{else}}n/a{{end}}
-
-{{end}}
-
-`,
-))

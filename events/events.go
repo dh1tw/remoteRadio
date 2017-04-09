@@ -13,15 +13,18 @@ import (
 const (
 	MqttConnStatus = "mqttConnStatus" // int
 	ForwardCat     = "forwardAudio"   //bool
-	Cli            = "cli"            // []string
+	CliInput       = "cliInput"       // []string
 	Shutdown       = "shutdown"       // bool
 	OsExit         = "osExit"         // bool
+	RadioLog       = "radiolog"       // string
+	ErrorLog       = "errorlog"       // string
 )
 
 // for message handling
 const (
 	ServerOnline = "serverOnline" //bool
 	Ping         = "ping"         // int64
+	Pong         = "pong"         // int64
 )
 
 func WatchSystemEvents(evPS *pubsub.PubSub) {

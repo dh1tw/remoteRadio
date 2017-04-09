@@ -309,7 +309,19 @@ func (r *radio) updateRit(newRit int32) error {
 		return err
 	}
 
+	xit, err := r.rig.GetXit(vfo)
+	if err != nil {
+		return err
+	}
+
+	freq, err := r.rig.GetFreq(vfo)
+	if err != nil {
+		return err
+	}
+
+	r.state.Vfo.Frequency = freq
 	r.state.Vfo.Rit = int32(rit)
+	r.state.Vfo.Xit = int32(xit)
 
 	return nil
 }
@@ -326,7 +338,13 @@ func (r *radio) updateXit(newXit int32) error {
 		return err
 	}
 
+	rit, err := r.rig.GetRit(vfo)
+	if err != nil {
+		return err
+	}
+
 	r.state.Vfo.Xit = int32(xit)
+	r.state.Vfo.Rit = int32(rit)
 
 	return nil
 }

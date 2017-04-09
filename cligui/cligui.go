@@ -1,19 +1,16 @@
-package radio
+package cliGui
 
 import (
-	"fmt"
-	"html/template"
 	"log"
 	"reflect"
 	"sync"
-
-	"os"
 
 	"github.com/cskr/pubsub"
 	"github.com/dh1tw/remoteRadio/comms"
 	"github.com/dh1tw/remoteRadio/events"
 	sbRadio "github.com/dh1tw/remoteRadio/sb_radio"
 	"github.com/dh1tw/remoteRadio/utils"
+	ui "github.com/gizak/termui"
 	"github.com/spf13/viper"
 )
 
@@ -21,6 +18,7 @@ type RemoteRadioSettings struct {
 	CatResponseCh   chan []byte
 	RadioStatusCh   chan []byte
 	CatRequestTopic string
+	PongCh          chan []int64
 	ToWireCh        chan comms.IOMsg
 	CapabilitiesCh  chan []byte
 	WaitGroup       *sync.WaitGroup
@@ -36,6 +34,7 @@ type remoteRadio struct {
 	printRigUpdates bool
 	userID          string
 	radioOnline     bool
+	logger          *log.Logger
 }
 
 type cliCmd struct {
@@ -51,7 +50,6 @@ func HandleRemoteRadio(rs RemoteRadioSettings) {
 	defer rs.WaitGroup.Done()
 
 	shutdownCh := rs.Events.Sub(events.Shutdown)
-	cliCh := rs.Events.Sub(events.Cli)
 
 	r := remoteRadio{}
 	r.state.Vfo = &sbRadio.Vfo{}
@@ -71,22 +69,49 @@ func HandleRemoteRadio(rs RemoteRadioSettings) {
 		r.userID = "unknown_" + utils.RandStringRunes(5)
 	}
 
+	loggingCh := make(chan string, 100)
+
+	r.logger = utils.NewChanLogger(loggingCh, "")
+
 	// rs.Events.Pub(true, events.ForwardCat)
 
-	fmt.Println("Rig command: ")
+	if err := ui.Init(); err != nil {
+		panic(err)
+	}
+	defer ui.Close()
+
+	cliInputCh := rs.Events.Sub(events.CliInput)
+	pongCh := rs.Events.Sub(events.Pong)
+
+	startedGUI := false
 
 	for {
 		select {
 		case msg := <-rs.CapabilitiesCh:
 			r.deserializeCaps(msg)
-			// r.PrintCapabilities()
+			if !startedGUI {
+				startedGUI = true
+				go guiLoop(r.caps, r.settings.Events)
+			}
+
 		case msg := <-rs.CatResponseCh:
 			r.deserializeCatResponse(msg)
-			// r.PrintState()
+			ui.SendCustomEvt("/network/update", r.state)
+
 		case msg := <-rs.RadioStatusCh:
 			r.deserializeRadioStatus(msg)
-		case msg := <-cliCh:
+
+		case msg := <-cliInputCh:
 			r.parseCli(msg.([]string))
+
+		case msg := <-loggingCh:
+			// forward to GUI event handler to be shown in the
+			// approriate window
+			ui.SendCustomEvt("/log/msg", msg)
+
+		case msg := <-pongCh:
+			ui.SendCustomEvt("/network/latency", msg)
+
 		case <-shutdownCh:
 			log.Println("Disconnecting from Radio")
 			return
@@ -103,7 +128,7 @@ func (r *remoteRadio) deserializeRadioStatus(data []byte) error {
 
 	if r.radioOnline != rStatus.GetOnline() {
 		r.radioOnline = rStatus.GetOnline()
-		fmt.Println("Update Radio Online:", r.radioOnline)
+		r.logger.Println("Radio Online:", r.radioOnline)
 	}
 
 	return nil
@@ -124,97 +149,6 @@ func (r *remoteRadio) sendCatRequest(req sbRadio.SetState) error {
 	r.settings.ToWireCh <- msg
 
 	return nil
-}
-
-var stateTmpl = template.Must(template.New("").Parse(
-	`
-Current Vfo: {{.CurrentVfo}}
-  Frequency: {{.Vfo.Frequency}}Hz
-  Mode: {{.Vfo.Mode}}
-  PBWidth: {{.Vfo.PbWidth}}
-  Antenna: {{.Vfo.Ant}}
-  Rit: {{.Vfo.Rit}}
-  Xit: {{.Vfo.Xit}}
-  Split: 
-    Enabled: {{.Vfo.Split.Enabled}}
-    Vfo: {{.Vfo.Split.Vfo}}
-    Frequency: {{.Vfo.Split.Frequency}}
-    Mode: {{.Vfo.Split.Mode}}
-    PbWidth: {{.Vfo.Split.PbWidth}}
-  Tuning Step: {{.Vfo.TuningStep}}
-  Functions: {{range $f := .Vfo.Functions}}{{$f}} {{end}}
-  Levels: {{range $name, $val := .Vfo.Levels}}
-    {{$name}}: {{$val}} {{end}}
-  Parameters: {{range $name, $val := .Vfo.Parameters}}
-    {{$name}}: {{$val}} {{end}}
-Radio On: {{.RadioOn}}
-Ptt: {{.Ptt}}
-Update Rate: {{.PollingInterval}}
-
-`,
-))
-
-var levelsTmpl = template.Must(template.New("").Parse(
-	`
-Levels: {{range $name, $val := .}}
-    {{$name}}: {{$val}} {{end}}
-`,
-))
-
-var capsTmpl = template.Must(template.New("").Parse(
-	`
-Radio Capabilities:
-
-Manufacturer: {{.MfgName}}
-Model Name: {{.ModelName}}
-Hamlib Rig Model ID: {{.RigModel}}
-Hamlib Rig Version: {{.Version}}
-Hamlib Rig Status: {{.Status}}
-Supported VFOs:{{range $vfo := .Vfos}}{{$vfo}} {{end}}
-Supported Modes: {{range $mode := .Modes}}{{$mode}} {{end}}
-Supported VFO Operations: {{range $vfoOp := .VfoOps}}{{$vfoOp}} {{end}}
-Supported Functions (Get):{{range $getF := .GetFunctions}}{{$getF}} {{end}}
-Supported Functions (Set): {{range $setF := .SetFunctions}}{{$setF}} {{end}}
-Supported Levels (Get): {{range $val := .GetLevels}}
-  {{$val.Name}} ({{$val.Min}}..{{$val.Max}}/{{$val.Step}}){{end}}
-Supported Levels (Set): {{range $val := .SetLevels}}
-  {{$val.Name}} ({{$val.Min}}..{{$val.Max}}/{{$val.Step}}){{end}}
-Supported Parameters (Get): {{range $val := .GetParameters}}
-  {{$val.Name}} ({{$val.Min}}..{{$val.Max}}/{{$val.Step}}){{end}}
-Supported Parameters (Set): {{range $val := .SetParameters}}
-  {{$val.Name}} ({{$val.Min}}..{{$val.Max}}/{{$val.Step}}){{end}}
-Max Rit: +-{{.MaxRit}}Hz
-Max Xit: +-{{.MaxXit}}Hz
-Max IF Shift: +-{{.MaxIfShift}}Hz
-Filters [Hz]: {{range $mode, $pbList := .Filters}}
-  {{$mode}}:		{{range $pb := $pbList.Value}}{{$pb}} {{end}} {{end}}
-Tuning Steps [Hz]: {{range $mode, $tsList := .TuningSteps}}
-  {{$mode}}:		{{range $ts := $tsList.Value}}{{$ts}} {{end}} {{end}}
-Preamps: {{range $preamp := .Preamps}}{{$preamp}}dB {{end}}
-Attenuators: {{range $att := .Attenuators}}{{$att}}dB {{end}} 
-
-`,
-))
-
-func (r *remoteRadio) PrintCapabilities() {
-	err := capsTmpl.Execute(os.Stdout, r.caps)
-	if err != nil {
-		fmt.Println(err)
-	}
-}
-
-func (r *remoteRadio) PrintLevels() {
-	err := levelsTmpl.Execute(os.Stdout, r.state.Vfo.Levels)
-	if err != nil {
-		fmt.Println(err)
-	}
-}
-
-func (r *remoteRadio) PrintState() {
-	err := stateTmpl.Execute(os.Stdout, r.state)
-	if err != nil {
-		fmt.Println(err)
-	}
 }
 
 func (r *remoteRadio) deserializeCaps(msg []byte) error {
@@ -241,7 +175,7 @@ func (r *remoteRadio) deserializeCatResponse(msg []byte) error {
 	if ns.CurrentVfo != r.state.CurrentVfo {
 		r.state.CurrentVfo = ns.CurrentVfo
 		if r.printRigUpdates {
-			fmt.Println("Updated Current Vfo:", r.state.CurrentVfo)
+			r.logger.Println("Updated Current Vfo:", r.state.CurrentVfo)
 		}
 	}
 
@@ -250,42 +184,42 @@ func (r *remoteRadio) deserializeCatResponse(msg []byte) error {
 		if ns.Vfo.GetFrequency() != r.state.Vfo.Frequency {
 			r.state.Vfo.Frequency = ns.Vfo.GetFrequency()
 			if r.printRigUpdates {
-				fmt.Printf("Updated Frequency: %.3fkHz\n", r.state.Vfo.Frequency/1000)
+				r.logger.Printf("Updated Frequency: %.3fkHz\n", r.state.Vfo.Frequency/1000)
 			}
 		}
 
 		if ns.Vfo.GetMode() != r.state.Vfo.Mode {
 			r.state.Vfo.Mode = ns.Vfo.GetMode()
 			if r.printRigUpdates {
-				fmt.Println("Updated Mode:", r.state.Vfo.Mode)
+				r.logger.Println("Updated Mode:", r.state.Vfo.Mode)
 			}
 		}
 
 		if ns.Vfo.GetPbWidth() != r.state.Vfo.PbWidth {
 			r.state.Vfo.PbWidth = ns.Vfo.GetPbWidth()
 			if r.printRigUpdates {
-				fmt.Printf("Updated Filter: %dHz\n", r.state.Vfo.PbWidth)
+				r.logger.Printf("Updated Filter: %dHz\n", r.state.Vfo.PbWidth)
 			}
 		}
 
 		if ns.Vfo.GetAnt() != r.state.Vfo.Ant {
 			r.state.Vfo.Ant = ns.Vfo.GetAnt()
 			if r.printRigUpdates {
-				fmt.Println("Updated Antenna:", r.state.Vfo.Ant)
+				r.logger.Println("Updated Antenna:", r.state.Vfo.Ant)
 			}
 		}
 
 		if ns.Vfo.GetRit() != r.state.Vfo.Rit {
 			r.state.Vfo.Rit = ns.Vfo.GetRit()
 			if r.printRigUpdates {
-				fmt.Printf("Updated Rit: %dHz\n", r.state.Vfo.Rit)
+				r.logger.Printf("Updated Rit: %dHz\n", r.state.Vfo.Rit)
 			}
 		}
 
 		if ns.Vfo.GetXit() != r.state.Vfo.Xit {
 			r.state.Vfo.Xit = ns.Vfo.GetXit()
 			if r.printRigUpdates {
-				fmt.Printf("Updated Xit: %dHz\n", r.state.Vfo.Xit)
+				r.logger.Printf("Updated Xit: %dHz\n", r.state.Vfo.Xit)
 			}
 		}
 
@@ -300,7 +234,7 @@ func (r *remoteRadio) deserializeCatResponse(msg []byte) error {
 		if ns.Vfo.GetTuningStep() != r.state.Vfo.TuningStep {
 			r.state.Vfo.TuningStep = ns.Vfo.GetTuningStep()
 			if r.printRigUpdates {
-				fmt.Printf("Updated Tuning Step: %dHz\n", r.state.Vfo.TuningStep)
+				r.logger.Printf("Updated Tuning Step: %dHz\n", r.state.Vfo.TuningStep)
 			}
 		}
 
@@ -333,21 +267,21 @@ func (r *remoteRadio) deserializeCatResponse(msg []byte) error {
 	if ns.GetRadioOn() != r.state.RadioOn {
 		r.state.RadioOn = ns.GetRadioOn()
 		if r.printRigUpdates {
-			fmt.Println("Updated Radio Power On:", r.state.RadioOn)
+			r.logger.Println("Updated Radio Power On:", r.state.RadioOn)
 		}
 	}
 
 	if ns.GetPtt() != r.state.Ptt {
 		r.state.Ptt = ns.GetPtt()
 		if r.printRigUpdates {
-			fmt.Println("Updated PTT On:", r.state.Ptt)
+			r.logger.Println("Updated PTT On:", r.state.Ptt)
 		}
 	}
 
 	if ns.GetPollingInterval() != r.state.PollingInterval {
 		r.state.PollingInterval = ns.GetPollingInterval()
 		if r.printRigUpdates {
-			fmt.Printf("Updated rig polling interval: %dms\n", r.state.PollingInterval)
+			r.logger.Printf("Updated rig polling interval: %dms\n", r.state.PollingInterval)
 		}
 	}
 
@@ -359,28 +293,28 @@ func (r *remoteRadio) updateSplit(newSplit *sbRadio.Split) error {
 	if newSplit.GetEnabled() != r.state.Vfo.Split.Enabled {
 		r.state.Vfo.Split.Enabled = newSplit.GetEnabled()
 		if r.printRigUpdates {
-			fmt.Println("Updated Split Enabled:", r.state.Vfo.Split.Enabled)
+			r.logger.Println("Updated Split Enabled:", r.state.Vfo.Split.Enabled)
 		}
 	}
 
 	if newSplit.GetFrequency() != r.state.Vfo.Split.Frequency {
 		r.state.Vfo.Split.Frequency = newSplit.GetFrequency()
 		if r.printRigUpdates {
-			fmt.Printf("Updated TX (Split) Frequency: %.3fkHz\n", r.state.Vfo.Split.Frequency/1000)
+			r.logger.Printf("Updated TX (Split) Frequency: %.3fkHz\n", r.state.Vfo.Split.Frequency/1000)
 		}
 	}
 
 	if newSplit.GetVfo() != r.state.Vfo.Split.Vfo {
 		r.state.Vfo.Split.Vfo = newSplit.GetVfo()
 		if r.printRigUpdates {
-			fmt.Println("Updated TX (Split) Vfo:", r.state.Vfo.Split.Vfo)
+			r.logger.Println("Updated TX (Split) Vfo:", r.state.Vfo.Split.Vfo)
 		}
 	}
 
 	if newSplit.GetMode() != r.state.Vfo.Split.Mode {
 		r.state.Vfo.Split.Mode = newSplit.GetMode()
 		if r.printRigUpdates {
-			fmt.Println("Updated TX (Split) Mode:", r.state.Vfo.Split.Mode)
+			r.logger.Println("Updated TX (Split) Mode:", r.state.Vfo.Split.Mode)
 		}
 	}
 
@@ -388,7 +322,7 @@ func (r *remoteRadio) updateSplit(newSplit *sbRadio.Split) error {
 
 		r.state.Vfo.Split.PbWidth = newSplit.GetPbWidth()
 		if r.printRigUpdates {
-			fmt.Printf("Split PbWidth: %dHz\n", r.state.Vfo.Split.PbWidth)
+			r.logger.Printf("Split PbWidth: %dHz\n", r.state.Vfo.Split.PbWidth)
 		}
 	}
 

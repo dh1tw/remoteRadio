@@ -2,7 +2,8 @@
 user_id = "dh1tw_ubuntu"
 
 [mqtt]
-broker_url = "localhost"
+#broker_url = "localhost"
+broker_url = "138.68.85.87"
 #broker_url = "test.mosquitto.org"
 broker_port = 1883
 station = "dh1tw"
