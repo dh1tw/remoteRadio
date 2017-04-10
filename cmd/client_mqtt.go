@@ -128,13 +128,13 @@ func mqttCliClient(cmd *cobra.Command, args []string) {
 		WaitGroup:       &wg,
 	}
 
-	wg.Add(2) //MQTT + RemoteRadio
+	wg.Add(3) //MQTT + RemoteRadio + SysEvents
 
 	connectionStatusCh := evPS.Sub(events.MqttConnStatus)
 	osExitCh := evPS.Sub(events.OsExit)
 	shutdownCh := evPS.Sub(events.Shutdown)
 
-	go events.WatchSystemEvents(evPS)
+	go events.WatchSystemEvents(evPS, &wg)
 	go cliClient.HandleRemoteRadio(remoteRadioSettings)
 	time.Sleep(200 * time.Millisecond)
 	go comms.MqttClient(mqttSettings)
@@ -151,6 +151,12 @@ func mqttCliClient(cmd *cobra.Command, args []string) {
 
 		// shutdown the application gracefully
 		case <-shutdownCh:
+			//force exit after 1 sec
+			exitTicker := time.NewTicker(time.Second)
+			go func() {
+				<-exitTicker.C
+				os.Exit(0)
+			}()
 			wg.Wait()
 			os.Exit(0)
 

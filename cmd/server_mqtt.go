@@ -29,16 +29,17 @@ import (
 	"time"
 
 	"github.com/cskr/pubsub"
-	"github.com/dh1tw/remoteAudio/events"
 	"github.com/dh1tw/remoteRadio/comms"
+	"github.com/dh1tw/remoteRadio/events"
+	"github.com/dh1tw/remoteRadio/ping"
 	"github.com/dh1tw/remoteRadio/radio"
 	"github.com/dh1tw/remoteRadio/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	hl "github.com/dh1tw/goHamlib"
-	"github.com/dh1tw/remoteRadio/pong"
 	sbRadio "github.com/dh1tw/remoteRadio/sb_radio"
+	sbStatus "github.com/dh1tw/remoteRadio/sb_status"
 )
 
 // serverMqttCmd represents the mqtt command
@@ -115,7 +116,7 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 	toDeserializePingRequestCh := make(chan []byte, 10)
 
 	// Event PubSub
-	evPS := pubsub.New(1)
+	evPS := pubsub.New(10)
 
 	// WaitGroup to coordinate a graceful shutdown
 	var wg sync.WaitGroup
@@ -133,6 +134,8 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 		Retain: true,
 	}
 
+	appLogger := utils.NewStdLogger("")
+
 	mqttSettings := comms.MqttSettings{
 		WaitGroup:  &wg,
 		Transport:  "tcp",
@@ -145,10 +148,11 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 		ToWire:   toWireCh,
 		Events:   evPS,
 		LastWill: &lastWill,
+		Logger:   appLogger,
 	}
 
-	pongSettings := pong.Settings{
-		PingRxCh:  toDeserializePingRequestCh,
+	pongSettings := ping.Settings{
+		PongCh:    toDeserializePingRequestCh,
 		ToWireCh:  toWireCh,
 		PongTopic: serverPongTopic,
 		WaitGroup: &wg,
@@ -198,37 +202,46 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 		PollingInterval:  pollingInterval,
 	}
 
-	wg.Add(3) //MQTT + Ping + Radio
+	wg.Add(4) //MQTT + Ping + Radio + Events
 
 	connectionStatusCh := evPS.Sub(events.MqttConnStatus)
-	osExitCh := evPS.Sub(events.OsExit)
 	shutdownCh := evPS.Sub(events.Shutdown)
+	prepareShutdownCh := evPS.Sub(events.PrepareShutdown)
 
-	go events.WatchSystemEvents(evPS)
+	go events.WatchSystemEvents(evPS, &wg)
 	go comms.MqttClient(mqttSettings)
-	go pong.HandlePong(pongSettings)
+	go ping.EchoPing(pongSettings)
 
 	time.Sleep(time.Millisecond * 1300)
 	go radio.HandleRadio(radioSettings)
 
 	status := serverStatus{}
 	status.topic = serverStatusTopic
+	status.toWireCh = toWireCh
 
 	for {
 		select {
+		case <-prepareShutdownCh:
 
-		// CTRL-C has been pressed; let's prepare the shutdown
-		case <-osExitCh:
-			// advice that we are going offline
+			// publish that the server is going offline
 			status.online = false
-			if err := status.sendUpdate(toWireCh); err != nil {
+			if err := status.sendUpdate(); err != nil {
 				fmt.Println(err)
 			}
-			time.Sleep(time.Millisecond * 200)
+			time.Sleep(time.Millisecond * 500)
+			// inform the other goroutines to shut down
 			evPS.Pub(true, events.Shutdown)
 
 		// shutdown the application gracefully
 		case <-shutdownCh:
+			//force exit after 1 sec
+			exitTimeout := time.NewTimer(time.Second)
+			go func() {
+				<-exitTimeout.C
+				fmt.Println("quitting forcefully")
+				os.Exit(0)
+			}()
+
 			wg.Wait()
 			os.Exit(0)
 
@@ -237,7 +250,7 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 			fmt.Println("connstatus:", connStatus)
 			if connStatus == comms.CONNECTED {
 				status.online = true
-				if err := status.sendUpdate(toWireCh); err != nil {
+				if err := status.sendUpdate(); err != nil {
 					fmt.Println(err)
 				}
 			} else {
@@ -248,30 +261,28 @@ func mqttRadioServer(cmd *cobra.Command, args []string) {
 }
 
 type serverStatus struct {
-	online bool
-	topic  string
+	online   bool
+	topic    string
+	toWireCh chan comms.IOMsg
 }
 
-func (status *serverStatus) sendUpdate(toWireCh chan comms.IOMsg) error {
+func (s *serverStatus) sendUpdate() error {
 
-	msg := sbRadio.Status{}
-	msg.Online = status.online
+	msg := sbStatus.Status{}
+	msg.Online = s.online
 	data, err := msg.Marshal()
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("sending status:", status.online)
-
 	m := comms.IOMsg{}
 	m.Data = data
-	m.Topic = status.topic
+	m.Topic = s.topic
 	m.Retain = true
 
-	toWireCh <- m
+	s.toWireCh <- m
 
 	return nil
-
 }
 
 func createLastWillMsg() ([]byte, error) {

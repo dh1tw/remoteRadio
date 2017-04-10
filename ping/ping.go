@@ -15,14 +15,17 @@ import (
 type Settings struct {
 	ToWireCh  chan comms.IOMsg
 	PongCh    chan []byte
+	PingCh    chan []byte
 	PingTopic string
+	PongTopic string
 	UserID    string
 	WaitGroup *sync.WaitGroup
 	Events    *pubsub.PubSub
 }
 
 // CheckLatency sends out a ping every second to the server
-// to determine the system latency
+// to determine the system latency.  This Function is
+// typically executed as a goroutine in client applications
 func CheckLatency(ps Settings) {
 
 	defer ps.WaitGroup.Done()
@@ -53,6 +56,28 @@ func CheckLatency(ps Settings) {
 
 		case ev := <-connectionStatusCh:
 			connectionStatus = ev.(int)
+		}
+	}
+}
+
+// EchoPing receives a Ping Request and sends it back (Pong). This Function is
+// typically executed as a goroutine on server applications
+func EchoPing(ps Settings) {
+
+	defer ps.WaitGroup.Done()
+
+	shutdownCh := ps.Events.Sub(events.Shutdown)
+
+	for {
+		select {
+		case <-shutdownCh:
+			return
+
+		case msg := <-ps.PongCh:
+			pong := comms.IOMsg{}
+			pong.Data = msg
+			pong.Topic = ps.PongTopic
+			ps.ToWireCh <- pong
 		}
 	}
 }

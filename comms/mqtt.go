@@ -28,6 +28,7 @@ type MqttSettings struct {
 	ToWire                      chan IOMsg
 	Events                      *pubsub.PubSub
 	LastWill                    *LastWill
+	Logger                      *log.Logger
 }
 
 // LastWill defines the LastWill for MQTT. The LastWill will be
@@ -105,14 +106,14 @@ func MqttClient(s MqttSettings) {
 	}
 
 	var connectionLostHandler = func(client mqtt.Client, err error) {
-		log.Println("Connection lost to MQTT Broker; Reason:", err)
+		s.Logger.Println("Connection lost to MQTT Broker; Reason:", err)
 		s.Events.Pub(DISCONNECTED, events.MqttConnStatus)
 	}
 
 	// since we use SetCleanSession we have to subscribe on each
 	// connect or reconnect to the channels
 	var onConnectHandler = func(client mqtt.Client) {
-		log.Printf("Connected to MQTT Broker %s:%d\n", s.BrokerURL, s.BrokerPort)
+		s.Logger.Printf("Connected to MQTT Broker %s:%d\n", s.BrokerURL, s.BrokerPort)
 
 		// Subscribe to Task Topics
 		for _, topic := range s.Topics {
@@ -147,7 +148,7 @@ func MqttClient(s MqttSettings) {
 	for {
 		select {
 		case <-shutdownCh:
-			log.Println("Disconnecting from MQTT Broker")
+			s.Logger.Println("Disconnecting from MQTT Broker")
 			if client.IsConnected() {
 				client.Disconnect(0)
 			}

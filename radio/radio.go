@@ -101,6 +101,11 @@ func HandleRadio(rs RadioSettings) {
 		}
 	}
 
+	err = r.rig.SetConf("fast_commands_token", "1")
+	if err != nil {
+		log.Println(err)
+	}
+
 	// publish the radio's state
 	if err := r.sendState(); err != nil {
 		log.Println(err)

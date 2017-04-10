@@ -1,4 +1,4 @@
-package cliGui
+package cligui
 
 import (
 	"math"

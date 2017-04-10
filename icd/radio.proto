@@ -51,10 +51,6 @@ message Int32List{
     repeated int32 value = 14;
 }
 
-message Status{
-    bool online = 1;
-}
-
 message Vfo{
     double frequency = 2;
     string mode = 3;

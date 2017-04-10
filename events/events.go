@@ -4,6 +4,8 @@ import (
 	"os"
 	"os/signal"
 
+	"sync"
+
 	"github.com/cskr/pubsub"
 )
 
@@ -11,23 +13,21 @@ import (
 
 // internal
 const (
-	MqttConnStatus = "mqttConnStatus" // int
-	ForwardCat     = "forwardAudio"   //bool
-	CliInput       = "cliInput"       // []string
-	Shutdown       = "shutdown"       // bool
-	OsExit         = "osExit"         // bool
-	RadioLog       = "radiolog"       // string
-	ErrorLog       = "errorlog"       // string
+	MqttConnStatus  = "mqttConnStatus" // int
+	ForwardCat      = "forwardAudio"   //bool
+	CliInput        = "cliInput"       // []string
+	PrepareShutdown = "prepShutdown"   // no type
+	Shutdown        = "shutdown"       // no type
+	OsExit          = "osExit"         // bool
+	AppLog          = "applog"         // string
+	RadioLog        = "radiolog"       // string
+	ServerOnline    = "serverOnline"   //bool
+	Pong            = "pong"           // int64
 )
 
-// for message handling
-const (
-	ServerOnline = "serverOnline" //bool
-	Ping         = "ping"         // int64
-	Pong         = "pong"         // int64
-)
+func WatchSystemEvents(evPS *pubsub.PubSub, wg *sync.WaitGroup) {
 
-func WatchSystemEvents(evPS *pubsub.PubSub) {
+	defer wg.Done()
 
 	// Channel to handle OS signals
 	osSignals := make(chan os.Signal, 1)
@@ -38,7 +38,8 @@ func WatchSystemEvents(evPS *pubsub.PubSub) {
 	select {
 	case osSignal := <-osSignals:
 		if osSignal == os.Interrupt {
-			evPS.Pub(true, OsExit)
+			evPS.Pub(true, PrepareShutdown)
+			return
 		}
 	}
 }

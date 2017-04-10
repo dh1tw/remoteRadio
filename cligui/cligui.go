@@ -1,4 +1,4 @@
-package cliGui
+package cligui
 
 import (
 	"log"
@@ -69,9 +69,10 @@ func HandleRemoteRadio(rs RemoteRadioSettings) {
 		r.userID = "unknown_" + utils.RandStringRunes(5)
 	}
 
-	loggingCh := make(chan string, 100)
+	logger := utils.NewChLogger(rs.Events, events.AppLog, "")
+	r.logger = logger
 
-	r.logger = utils.NewChanLogger(loggingCh, "")
+	loggingCh := rs.Events.Sub(events.AppLog)
 
 	// rs.Events.Pub(true, events.ForwardCat)
 
@@ -82,21 +83,19 @@ func HandleRemoteRadio(rs RemoteRadioSettings) {
 
 	cliInputCh := rs.Events.Sub(events.CliInput)
 	pongCh := rs.Events.Sub(events.Pong)
+	serverStatusCh := rs.Events.Sub(events.ServerOnline)
 
-	startedGUI := false
+	go guiLoop(r.caps, r.settings.Events)
 
 	for {
 		select {
 		case msg := <-rs.CapabilitiesCh:
 			r.deserializeCaps(msg)
-			if !startedGUI {
-				startedGUI = true
-				go guiLoop(r.caps, r.settings.Events)
-			}
+			ui.SendCustomEvt("/radio/caps", r.caps)
 
 		case msg := <-rs.CatResponseCh:
 			r.deserializeCatResponse(msg)
-			ui.SendCustomEvt("/network/update", r.state)
+			ui.SendCustomEvt("/radio/state", r.state)
 
 		case msg := <-rs.RadioStatusCh:
 			r.deserializeRadioStatus(msg)
@@ -108,6 +107,14 @@ func HandleRemoteRadio(rs RemoteRadioSettings) {
 			// forward to GUI event handler to be shown in the
 			// approriate window
 			ui.SendCustomEvt("/log/msg", msg)
+
+		case msg := <-serverStatusCh:
+			if msg.(bool) {
+				logger.Println("Server Online")
+			} else {
+				logger.Println("Server Offline")
+			}
+			ui.SendCustomEvt("/radio/status", msg.(bool))
 
 		case msg := <-pongCh:
 			ui.SendCustomEvt("/network/latency", msg)

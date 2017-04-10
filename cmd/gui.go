@@ -31,6 +31,7 @@ import (
 	"github.com/dh1tw/remoteRadio/comms"
 	"github.com/dh1tw/remoteRadio/events"
 	"github.com/dh1tw/remoteRadio/ping"
+	"github.com/dh1tw/remoteRadio/serverstatus"
 	"github.com/dh1tw/remoteRadio/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -114,6 +115,8 @@ func guiCliClient(cmd *cobra.Command, args []string) {
 		Events:    evPS,
 	}
 
+	appLogger := utils.NewChLogger(evPS, events.AppLog, "")
+
 	mqttSettings := comms.MqttSettings{
 		WaitGroup:  &wg,
 		Transport:  "tcp",
@@ -129,9 +132,10 @@ func guiCliClient(cmd *cobra.Command, args []string) {
 		ToWire:   toWireCh,
 		Events:   evPS,
 		LastWill: nil,
+		Logger:   appLogger,
 	}
 
-	remoteRadioSettings := cliGui.RemoteRadioSettings{
+	remoteRadioSettings := cligui.RemoteRadioSettings{
 		CatResponseCh:   toDeserializeCatResponseCh,
 		RadioStatusCh:   toDeserializeStatusCh,
 		CapabilitiesCh:  toDeserializeCapsCh,
@@ -141,25 +145,31 @@ func guiCliClient(cmd *cobra.Command, args []string) {
 		WaitGroup:       &wg,
 	}
 
-	wg.Add(3) //MQTT + RemoteRadio
+	serverStatusSettings := serverstatus.Settings{
+		Waitgroup:      &wg,
+		ServerStatusCh: toDeserializeStatusCh,
+		Events:         evPS,
+		Logger:         appLogger,
+	}
+
+	wg.Add(4) //MQTT + ping + cligui + MonitorServerStatus
 
 	shutdownCh := evPS.Sub(events.Shutdown)
 
-	go events.WatchSystemEvents(evPS)
 	go ping.CheckLatency(pingSettings)
-	go cliGui.HandleRemoteRadio(remoteRadioSettings)
-	time.Sleep(200 * time.Millisecond)
+	go cligui.HandleRemoteRadio(remoteRadioSettings)
+	go serverstatus.MonitorServerStatus(serverStatusSettings)
+	go time.Sleep(200 * time.Millisecond)
 	go comms.MqttClient(mqttSettings)
 
 	for {
 		select {
-
 		// shutdown the application gracefully
 		case <-shutdownCh:
-			//avoid waiting endlessly
-			exitTicker := time.NewTicker(time.Second)
+			//force exit after 1 sec
+			exitTimeout := time.NewTimer(time.Second)
 			go func() {
-				<-exitTicker.C
+				<-exitTimeout.C
 				os.Exit(0)
 			}()
 			wg.Wait()
